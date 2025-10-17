@@ -3,8 +3,8 @@ Booking configuration for different sports
 """
 
 # Login credentials
-USERNAME = "username"
-PASSWORD = "password"
+USERNAME = "18058972d"
+PASSWORD = "abc"
 USER_ID = "442240"
 
 # Common venue
