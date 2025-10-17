@@ -290,8 +290,7 @@ class GenericBooking:
             form_data['searchFormString'] = (
                 f"fbUserId={config['user_id']}&bookType=INDV&"
                 f"dataSetId={config['dataset_id']}&actvId={config['activity_id']}&"
-                f"searchDate={config['date'].replace(' ', '+')}&"
-                f"ctrId={config['center_id']}&facilityId="
+                f"searchDate=&ctrId={config['center_id']}&facilityId="
             )
         elif sport == "table_tennis":
             form_data['searchFormString'] = (
@@ -311,8 +310,8 @@ class GenericBooking:
         return form_data
 
     def submit_booking(self, config):
-        """Submit booking request"""
-        print(f"[{self._get_hkt_time()}] 🚀 SUBMITTING BOOKING REQUEST...")
+        """Submit booking request - sends 3 times"""
+        print(f"[{self._get_hkt_time()}] 🚀 SUBMITTING BOOKING REQUEST (3 TIMES)...")
         print(f"   Sport: {config['sport']}")
         print(f"   Facility: {config['facility_name']}")
         print(f"   Time: {config['start_time']} - {config['end_time']}")
@@ -331,25 +330,30 @@ class GenericBooking:
             'Content-Type': 'application/x-www-form-urlencoded',
         })
 
-        # Send request
-        start_time = time.time()
-        response = self.session.post(booking_url, data=form_data)
-        elapsed = (time.time() - start_time) * 1000
+        # Send request 3 times
+        responses = []
+        for i in range(3):
+            print(f"[{self._get_hkt_time()}] 📤 Sending request #{i+1}/3...")
+            start_time = time.time()
+            response = self.session.post(booking_url, data=form_data)
+            elapsed = (time.time() - start_time) * 1000
+            responses.append(response)
 
-        print(
-            f"[{self._get_hkt_time()}] "
-            f"📬 Response received in {elapsed:.0f}ms"
-        )
-        print(f"   Status: {response.status_code}")
+            print(
+                f"[{self._get_hkt_time()}] "
+                f"📬 Response #{i+1} received in {elapsed:.0f}ms"
+            )
+            print(f"   Status: {response.status_code}")
 
-        # Save response to file for inspection
-        timestamp = datetime.now(self.hkt).strftime('%Y%m%d_%H%M%S')
-        response_filename = f'booking_response_{timestamp}.html'
-        with open(response_filename, 'w', encoding='utf-8') as f:
-            f.write(response.text)
-        print(f"[{self._get_hkt_time()}] 💾 Saved response to {response_filename}")
+            # Save response to file for inspection
+            timestamp = datetime.now(self.hkt).strftime('%Y%m%d_%H%M%S_%f')
+            response_filename = f'booking_response_{timestamp}_req{i+1}.html'
+            with open(response_filename, 'w', encoding='utf-8') as f:
+                f.write(response.text)
+            print(f"[{self._get_hkt_time()}] 💾 Saved response to {response_filename}")
 
-        # Check response
+        # Check the last response
+        print(f"\n[{self._get_hkt_time()}] 📊 All 3 requests sent!")
         if response.status_code == 200:
             if "success" in response.text.lower():
                 print(f"[{self._get_hkt_time()}] ✅ BOOKING SUCCESSFUL!")
