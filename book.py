@@ -14,7 +14,7 @@ from booking_config import get_booking_config
 class GenericBooking:
     """Generic booking system for PolyU facilities"""
 
-    def __init__(self):
+    def __init__(self, user_id=None):
         self.playwright = None
         self.browser = None
         self.page = None
@@ -22,6 +22,7 @@ class GenericBooking:
         self.hkt = pytz.timezone('Asia/Hong_Kong')
         self.cookies = []
         self.session = requests.Session()  # For fast submission
+        self.user_id = user_id  # For unique debug file naming
 
     def start_browser(self, headless=False):
         """Initialize Playwright browser"""
@@ -48,10 +49,13 @@ class GenericBooking:
         """Close Playwright browser"""
         if self.page:
             self.page.close()
+            self.page = None
         if self.browser:
             self.browser.close()
+            self.browser = None
         if self.playwright:
             self.playwright.stop()
+            self.playwright = None
         print(f"[{self._get_hkt_time()}] 🚪 Browser closed")
 
     def login(self, username, password):
@@ -124,10 +128,11 @@ class GenericBooking:
             # Get page content
             page_content = self.page.content()
 
-            # Debug: Save HTML to file for inspection
-            with open('debug_csrf_page.html', 'w', encoding='utf-8') as f:
+            # Debug: Save HTML to file for inspection (with unique name per user)
+            debug_filename = f'debug_csrf_page_{self.user_id}.html'
+            with open(debug_filename, 'w', encoding='utf-8') as f:
                 f.write(page_content)
-            print(f"[{self._get_hkt_time()}] 🔍 Saved HTML to debug_csrf_page.html")
+            print(f"[{self._get_hkt_time()}] 🔍 Saved HTML to {debug_filename}")
             print(f"[{self._get_hkt_time()}] 🔍 Current URL: {self.page.url}")
             print(f"[{self._get_hkt_time()}] 🔍 Page length: {len(page_content)} chars")
 
@@ -337,6 +342,13 @@ class GenericBooking:
         )
         print(f"   Status: {response.status_code}")
 
+        # Save response to file for inspection
+        timestamp = datetime.now(self.hkt).strftime('%Y%m%d_%H%M%S')
+        response_filename = f'booking_response_{timestamp}.html'
+        with open(response_filename, 'w', encoding='utf-8') as f:
+            f.write(response.text)
+        print(f"[{self._get_hkt_time()}] 💾 Saved response to {response_filename}")
+
         # Check response
         if response.status_code == 200:
             if "success" in response.text.lower():
@@ -397,7 +409,12 @@ class GenericBooking:
         booking_date,
         target_time_str,
         network_offset_ms=200,
-        headless=False
+        headless=False,
+        username=None,
+        password=None,
+        user_id=None,
+        custom_start_time=None,
+        custom_end_time=None
     ):
         """
         Complete workflow: login, wait, submit at exact time
@@ -409,16 +426,37 @@ class GenericBooking:
             target_time_str: Target submission time (e.g., "08:30:00")
             network_offset_ms: Send request this many ms early (default 200ms)
             headless: Run browser in headless mode (default True)
+            username: Optional custom username (overrides config)
+            password: Optional custom password (overrides config)
+            user_id: Optional custom user_id (overrides config)
+            custom_start_time: Optional custom start time (overrides config)
+            custom_end_time: Optional custom end time (overrides config)
         """
         print("="*70)
         print("🎯 GENERIC BOOKING SYSTEM")
         print("="*70)
 
-        # Get configuration
-        config = get_booking_config(sport, time_slot, booking_date)
+        # Get configuration with custom times if provided
+        config = get_booking_config(
+            sport,
+            time_slot,
+            booking_date,
+            custom_start_time=custom_start_time,
+            custom_end_time=custom_end_time
+        )
 
+        # Override with custom credentials if provided
+        if username:
+            config['username'] = username
+        if password:
+            config['password'] = password
+        if user_id:
+            config['user_id'] = user_id
+
+        # Display slot info
+        slot_display = time_slot if time_slot else "custom"
         print(f"Sport: {sport.upper()}")
-        print(f"Time Slot: {time_slot} ({config['start_time']}-{config['end_time']})")
+        print(f"Time Slot: {slot_display} ({config['start_time']}-{config['end_time']})")
         print(f"Date: {booking_date}")
         print("="*70 + "\n")
 
@@ -439,9 +477,7 @@ class GenericBooking:
             # Step 3: Transfer cookies to requests session for fast submission
             self.transfer_cookies_to_session()
 
-            # Step 4: Close browser (we have cookies and CSRF token now)
-            print(f"[{self._get_hkt_time()}] 🔒 Closing browser (keeping session)...")
-            self.close_browser()
+            # Step 4: Browser stays open for inspection (never closes)
 
             # Step 5: Parse target time
             today = datetime.now(self.hkt).date()
@@ -478,8 +514,17 @@ class GenericBooking:
             return False
 
         finally:
-            # Ensure browser is closed
-            if self.browser:
+            # Browser stays open for manual inspection (never closes)
+            print(f"\n[{self._get_hkt_time()}] 🌐 Browser left open for inspection")
+            print(f"[{self._get_hkt_time()}] ⏸️  Process will stay alive to keep browser open...")
+            print(f"[{self._get_hkt_time()}] 💡 Press Ctrl+C to close all browsers and exit")
+
+            # Keep process alive indefinitely to prevent browser from closing
+            try:
+                while True:
+                    time.sleep(60)  # Sleep forever
+            except KeyboardInterrupt:
+                print(f"\n[{self._get_hkt_time()}] 🛑 Shutting down...")
                 self.close_browser()
 
 

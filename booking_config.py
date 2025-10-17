@@ -3,7 +3,7 @@ Booking configuration for different sports
 """
 
 # Login credentials
-USERNAME = "18058972d"
+USERNAME = "123d"
 PASSWORD = "abc"
 USER_ID = "442240"
 
@@ -52,14 +52,16 @@ TIME_SLOTS = {
 }
 
 
-def get_booking_config(sport, time_slot, booking_date):
+def get_booking_config(sport, time_slot, booking_date, custom_start_time=None, custom_end_time=None):
     """
     Generate booking configuration for a specific sport and time slot
 
     Args:
         sport: "volleyball" or "table_tennis"
-        time_slot: Key from TIME_SLOTS (e.g., "morning_early")
+        time_slot: Key from TIME_SLOTS (e.g., "morning_early") or None if using custom times
         booking_date: Date string (e.g., "25 Oct 2025")
+        custom_start_time: Optional custom start time (overrides time_slot)
+        custom_end_time: Optional custom end time (overrides time_slot)
 
     Returns:
         dict: Complete booking configuration
@@ -67,11 +69,23 @@ def get_booking_config(sport, time_slot, booking_date):
     if sport not in SPORTS_CONFIG:
         raise ValueError(f"Invalid sport: {sport}. Choose from {list(SPORTS_CONFIG.keys())}")
 
-    if time_slot not in TIME_SLOTS:
+    # Allow None time_slot if custom times are provided
+    if time_slot is None and (custom_start_time is None or custom_end_time is None):
+        raise ValueError(f"Either time_slot or both custom times must be provided")
+
+    if time_slot is not None and time_slot not in TIME_SLOTS:
         raise ValueError(f"Invalid time slot: {time_slot}. Choose from {list(TIME_SLOTS.keys())}")
 
     sport_config = SPORTS_CONFIG[sport]
-    slot_config = TIME_SLOTS[time_slot]
+
+    # Use custom times if provided, otherwise use predefined time_slot
+    if custom_start_time and custom_end_time:
+        slot_config = {
+            "start": custom_start_time,
+            "end": custom_end_time
+        }
+    else:
+        slot_config = TIME_SLOTS[time_slot]
 
     return {
         "username": USERNAME,
