@@ -1,15 +1,17 @@
 """
 Generic booking script with configurable sport and time slots
 """
+import re
+import os
+import time
+import sys
+import platform
+from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from playwright.sync_api import sync_playwright
 import requests
 from bs4 import BeautifulSoup
-import re
-from datetime import datetime, timedelta
-import time
 import pytz
-import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from booking_config import get_booking_config
 
 
@@ -26,6 +28,7 @@ class GenericBooking:
         self.session = requests.Session()  # For fast submission
         self.user_id = user_id  # For unique debug file naming
         self.output_dir = output_dir  # Directory to save output files
+        self.connection_warmed = False  # Track if connection is pre-warmed
 
     def start_browser(self, headless=False):
         """Initialize Playwright browser"""
@@ -401,8 +404,127 @@ class GenericBooking:
 
         return last_response
 
+    def wait_until_pre_trigger(self, pre_trigger_time_hkt):
+        """Wait until pre-trigger time (when to start browser and login)"""
+        while True:
+            now_hkt = datetime.now(self.hkt)
+            remaining = (pre_trigger_time_hkt - now_hkt).total_seconds()
+
+            if remaining <= 0:
+                break
+
+            if remaining > 2400:  # More than 40 minutes
+                print(
+                    f"[{self._get_hkt_time()}] "
+                    f"💤 Waiting... {int(remaining/60)} minutes until browser start"
+                )
+                time.sleep(1200)  # Sleep 20 minutes at a time
+            elif remaining > 1200:  # 20-40 minutes
+                print(
+                    f"[{self._get_hkt_time()}] "
+                    f"💤 Waiting... {int(remaining/60)} minutes until browser start"
+                )
+                time.sleep(240)  # Sleep 4 minutes at a time
+            elif remaining > 300:  # 5-20 minutes
+                print(
+                    f"[{self._get_hkt_time()}] "
+                    f"💤 Waiting... {int(remaining/60)} minutes until browser start"
+                )
+                time.sleep(60)  # Sleep 1 minute at a time
+            elif remaining > 60:  # 1-5 minutes
+                print(
+                    f"[{self._get_hkt_time()}] "
+                    f"💤 Waiting... {int(remaining)}s until browser start"
+                )
+                time.sleep(10)  # Sleep 10 seconds at a time
+            elif remaining > 10:
+                print(
+                    f"[{self._get_hkt_time()}] "
+                    f"⏳ {remaining:.1f}s until browser start..."
+                )
+                time.sleep(5)
+            else:
+                print(
+                    f"[{self._get_hkt_time()}] "
+                    f"⏰ {remaining:.1f}s until browser start..."
+                )
+                time.sleep(1)
+
+        print(f"[{self._get_hkt_time()}] ⚡ PRE-TRIGGER TIME REACHED!")
+
+    def boost_process_priority(self):
+        """Boost process priority for better timing accuracy"""
+        try:
+            system = platform.system()
+            if system == "Windows":
+                import psutil
+                p = psutil.Process(os.getpid())
+                p.nice(psutil.HIGH_PRIORITY_CLASS)
+                print(f"[{self._get_hkt_time()}] ⚡ Process priority boosted (Windows)")
+            elif system == "Darwin":  # macOS
+                os.nice(-10)
+                print(f"[{self._get_hkt_time()}] ⚡ Process priority boosted (macOS)")
+            elif system == "Linux":
+                os.nice(-10)
+                print(f"[{self._get_hkt_time()}] ⚡ Process priority boosted (Linux)")
+        except (ImportError, PermissionError, OSError) as e:
+            print(f"[{self._get_hkt_time()}] ⚠️  Could not boost priority: {e}")
+            print(f"[{self._get_hkt_time()}] 💡 Consider running as admin for better accuracy")
+
+    def warm_connection(self, url):
+        """Pre-warm network connection to reduce first-request latency"""
+        if self.connection_warmed:
+            return
+
+        try:
+            print(f"[{self._get_hkt_time()}] 🔥 Warming up network connection...")
+            # Make a quick HEAD request to establish TCP connection
+            self.session.head(url, timeout=5)
+            self.connection_warmed = True
+            print(f"[{self._get_hkt_time()}] ✅ Connection warmed and ready")
+        except Exception as e:
+            print(f"[{self._get_hkt_time()}] ⚠️  Connection warm-up failed: {e}")
+
+    def check_time_sync(self):
+        """Check if system time is synchronized"""
+        try:
+            print(f"[{self._get_hkt_time()}] 🕐 Checking system time synchronization...")
+
+            # Try to get time from a reliable NTP server
+            import socket
+            import struct
+
+            ntp_server = 'time.google.com'
+            ntp_port = 123
+
+            client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            client.settimeout(3)
+
+            # NTP request packet
+            ntp_packet = b'\x1b' + 47 * b'\0'
+            client.sendto(ntp_packet, (ntp_server, ntp_port))
+
+            data, _ = client.recvfrom(1024)
+            client.close()
+
+            # Extract transmit timestamp (seconds since 1900)
+            ntp_time = struct.unpack('!12I', data)[10]
+            ntp_time -= 2208988800  # Convert to Unix timestamp
+
+            system_time = time.time()
+            time_diff = abs(system_time - ntp_time)
+
+            if time_diff > 1.0:
+                print(f"[{self._get_hkt_time()}] ⚠️  WARNING: System time off by {time_diff:.2f}s!")
+                print(f"[{self._get_hkt_time()}] 💡 Please sync your system clock for accuracy")
+            else:
+                print(f"[{self._get_hkt_time()}] ✅ System time synchronized (diff: {time_diff*1000:.0f}ms)")
+        except Exception as e:
+            print(f"[{self._get_hkt_time()}] ⚠️  Could not verify time sync: {e}")
+            print(f"[{self._get_hkt_time()}] 💡 Ensure your system time is accurate")
+
     def wait_until_exact_time(self, target_time_hkt, offset_ms=0):
-        """Wait until exact target time in HKT"""
+        """Wait until exact target time in HKT with high-resolution timing"""
         adjusted_target = target_time_hkt - timedelta(milliseconds=offset_ms)
 
         while True:
@@ -430,13 +552,35 @@ class GenericBooking:
                     f"⏰ {remaining:.2f}s..."
                 )
                 time.sleep(0.5)
-            else:
+            elif remaining > 0.1:
+                # High-resolution waiting in final 1 second
                 print(f"[{self._get_hkt_time()}] 🎯 Final countdown...")
+                while True:
+                    now_hkt = datetime.now(self.hkt)
+                    remaining_ms = (adjusted_target - now_hkt).total_seconds() * 1000
+
+                    if remaining_ms <= 0:
+                        break
+
+                    # Adaptive sleep based on remaining time
+                    if remaining_ms > 100:
+                        time.sleep(0.01)  # 10ms sleep
+                    elif remaining_ms > 10:
+                        time.sleep(0.001)  # 1ms sleep
+                    else:
+                        # Busy-wait for final 10ms for maximum accuracy
+                        pass
+                break
+            else:
+                # Final busy-wait
                 while datetime.now(self.hkt) < adjusted_target:
-                    time.sleep(0.001)
+                    pass
                 break
 
+        actual_time = datetime.now(self.hkt)
+        timing_error_ms = (actual_time - target_time_hkt).total_seconds() * 1000
         print(f"[{self._get_hkt_time()}] ⚡ TIME REACHED! FIRING NOW!")
+        print(f"[{self._get_hkt_time()}] 📊 Timing accuracy: {timing_error_ms:+.1f}ms from target")
 
     def _get_hkt_time(self):
         """Get current HKT time as formatted string"""
@@ -454,10 +598,11 @@ class GenericBooking:
         password=None,
         user_id=None,
         custom_start_time=None,
-        custom_end_time=None
+        custom_end_time=None,
+        pre_trigger_minutes=15
     ):
         """
-        Complete workflow: login, wait, submit at exact time
+        Complete workflow: wait, login (at pre-trigger time), wait, submit at exact time
 
         Args:
             sport: "volleyball" or "table_tennis"
@@ -471,9 +616,10 @@ class GenericBooking:
             user_id: Optional custom user_id (overrides config)
             custom_start_time: Optional custom start time (overrides config)
             custom_end_time: Optional custom end time (overrides config)
+            pre_trigger_minutes: Minutes before target time to start browser and get token (default 15)
         """
         print("="*70)
-        print("🎯 GENERIC BOOKING SYSTEM")
+        print("🎯 GENERIC BOOKING SYSTEM - HIGH ACCURACY MODE")
         print("="*70)
 
         # Get configuration with custom times if provided
@@ -501,31 +647,65 @@ class GenericBooking:
         print("="*70 + "\n")
 
         try:
-            # Step 0: Start browser
-            self.start_browser(headless=headless)
+            # Step 0: System optimization checks
+            print("="*70)
+            print("🔧 SYSTEM OPTIMIZATION")
+            print("="*70)
 
-            # Step 1: Login
-            if not self.login(config['username'], config['password']):
-                print("❌ Login failed. Aborting.")
-                return False
+            # Check time synchronization
+            self.check_time_sync()
 
-            # Step 2: Extract CSRF token
-            if not self.extract_csrf_token():
-                print("❌ Failed to get CSRF token. Aborting.")
-                return False
+            # Boost process priority
+            self.boost_process_priority()
 
-            # Step 3: Transfer cookies to requests session for fast submission
-            self.transfer_cookies_to_session()
+            print("="*70 + "\n")
 
-            # Step 4: Browser stays open for inspection (never closes)
-
-            # Step 5: Parse target time
+            # Step 1: Parse target time
             today = datetime.now(self.hkt).date()
             target_datetime = datetime.strptime(
                 f"{today} {target_time_str}",
                 "%Y-%m-%d %H:%M:%S"
             )
             target_datetime = self.hkt.localize(target_datetime)
+
+            # Calculate pre-trigger time (when to start browser and login)
+            pre_trigger_datetime = target_datetime - timedelta(minutes=pre_trigger_minutes)
+
+            print(f"⏰ Current time: {self._get_hkt_time()} HKT")
+            print(f"⏰ Target time: {target_datetime.strftime('%H:%M:%S')} HKT")
+            print(f"⏰ Browser start time: {pre_trigger_datetime.strftime('%H:%M:%S')} HKT (T-{pre_trigger_minutes} min)")
+            print("="*70 + "\n")
+
+            # Step 2: Wait until pre-trigger time
+            self.wait_until_pre_trigger(pre_trigger_datetime)
+
+            # Step 2: Start browser
+            print("\n" + "="*70)
+            print(f"⏰ PRE-TRIGGER TIME REACHED! Starting browser and login...")
+            print("="*70 + "\n")
+            self.start_browser(headless=headless)
+
+            # Step 3: Login
+            if not self.login(config['username'], config['password']):
+                print("❌ Login failed. Aborting.")
+                return False
+
+            # Step 4: Extract CSRF token
+            if not self.extract_csrf_token():
+                print("❌ Failed to get CSRF token. Aborting.")
+                return False
+
+            # Step 5: Transfer cookies to requests session for fast submission
+            self.transfer_cookies_to_session()
+
+            # Step 6: Pre-warm network connection
+            booking_url = (
+                "https://www40.polyu.edu.hk/starspossfbstud/secure/"
+                "ui_make_book/make_book_submit.do"
+            )
+            self.warm_connection(booking_url)
+
+            # Step 7: Browser stays open for inspection (never closes)
 
             print("\n" + "="*70)
             print(f"✅ READY TO BOOK!")
@@ -537,10 +717,10 @@ class GenericBooking:
             print(f"   Time: {config['start_time']} - {config['end_time']}")
             print("="*70 + "\n")
 
-            # Step 6: Wait
+            # Step 8: Wait until exact submission time (with high-resolution timing)
             self.wait_until_exact_time(target_datetime, network_offset_ms)
 
-            # Step 7: Submit (using fast requests session)
+            # Step 8: Submit (using fast requests session)
             response = self.submit_booking(config)
 
             print("\n" + "="*70)

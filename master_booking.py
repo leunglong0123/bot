@@ -11,7 +11,7 @@ import pytz
 import os
 
 
-def run_booking_for_account(account_slot, sport, target_time_str, network_offset_ms, headless, output_dir):
+def run_booking_for_account(account_slot, sport, target_time_str, network_offset_ms, headless, output_dir, pre_trigger_minutes):
     """
     Run booking for a single account (executed in separate process)
 
@@ -22,6 +22,7 @@ def run_booking_for_account(account_slot, sport, target_time_str, network_offset
         network_offset_ms: Network offset in milliseconds
         headless: Run browser in headless mode
         output_dir: Directory to save output files
+        pre_trigger_minutes: Minutes before target time to start browser and get token
     """
     account_username = account_slot['username']
 
@@ -51,7 +52,9 @@ def run_booking_for_account(account_slot, sport, target_time_str, network_offset
             user_id=account_slot['user_id'],
             # Pass custom time slot
             custom_start_time=account_slot['start_time'],
-            custom_end_time=account_slot['end_time']
+            custom_end_time=account_slot['end_time'],
+            # Pass pre-trigger time
+            pre_trigger_minutes=pre_trigger_minutes
         )
 
         print(f"\n✅ [{account_username}] Booking process completed!")
@@ -68,7 +71,8 @@ def run_parallel_bookings(
     sport="volleyball",
     target_time_str="08:30:00",
     network_offset_ms=200,
-    headless=False
+    headless=False,
+    pre_trigger_minutes=15
 ):
     """
     Master function to run parallel bookings for all accounts
@@ -82,6 +86,7 @@ def run_parallel_bookings(
         target_time_str: Exact time to submit all bookings (e.g., "08:30:00")
         network_offset_ms: Network offset in milliseconds (default 200ms)
         headless: Run browsers in headless mode (default False)
+        pre_trigger_minutes: Minutes before target time to start browser and get token (default 15)
     """
     print("\n" + "="*70)
     print("🎯 MASTER BOOKING SCRIPT - PARALLEL EXECUTION")
@@ -115,6 +120,7 @@ def run_parallel_bookings(
     print(f"   Target submission time: {target_time_str}")
     print(f"   Network offset: {network_offset_ms}ms")
     print(f"   Headless mode: {headless}")
+    print(f"   Pre-trigger time: {pre_trigger_minutes} minutes before target")
     print(f"   Accounts to run: {len(account_slots)}")
     print("="*70 + "\n")
 
@@ -143,7 +149,8 @@ def run_parallel_bookings(
                 target_time_str,
                 network_offset_ms,
                 headless,
-                output_dir
+                output_dir,
+                pre_trigger_minutes
             )
         )
         processes.append(process)
@@ -170,6 +177,7 @@ TARGET_TIME = '03:35:00'  # Target submission time (HH:MM:SS)
 START_TIME = "08:30"  # Start time of the time slot (HH:MM)
 END_TIME = "12:30"  # End time of the time slot (HH:MM)
 DATE = "01 Nov 2025"  # Booking date (YYYY-MM-DD)
+PRE_TRIGGER_MINUTES = 15  # Start browser and get token X minutes before target time
 
 
 if __name__ == "__main__":
@@ -182,5 +190,6 @@ if __name__ == "__main__":
         sport=SPORT,
         target_time_str=TARGET_TIME,
         network_offset_ms=100,
-        headless=False  # Set to True to hide browser windows
+        headless=False,  # Set to True to hide browser windows
+        pre_trigger_minutes=PRE_TRIGGER_MINUTES  # Start browser X minutes before target
     )
