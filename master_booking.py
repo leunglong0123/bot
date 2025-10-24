@@ -36,7 +36,7 @@ def run_booking_for_account(account_slot, sport, target_time_str, network_offset
         booking = GenericBooking(account_slot['user_id'])
 
         # Run booking with account-specific credentials and time slot
-        result = booking.run(
+        booking.run(
             sport=sport,
             time_slot=None,  # We'll use custom times from account_slot
             booking_date=account_slot['date'],
@@ -53,11 +53,9 @@ def run_booking_for_account(account_slot, sport, target_time_str, network_offset
         )
 
         print(f"\n✅ [{account_username}] Booking process completed!")
-        return result
 
-    except Exception as e:
+    except (RuntimeError, ValueError, ConnectionError) as e:
         print(f"\n❌ [{account_username}] Error: {e}")
-        return False
 
 
 def run_parallel_bookings(
@@ -102,7 +100,7 @@ def run_parallel_bookings(
             f"   {slot['name']:<12} | {slot['username']:<12} | {slot['start_time']}-{slot['end_time']}")
 
     print("\n" + "="*70)
-    print(f"⚡ Configuration:")
+    print("⚡ Configuration:")
     print(f"   Sport: {sport}")
     print(f"   Booking date: {booking_date}")
     print(f"   Target submission time: {target_time_str}")
@@ -118,11 +116,6 @@ def run_parallel_bookings(
     print(
         f"\n⚠️  WARNING: This will launch {len(account_slots)} browser instances in parallel!")
     print("   Make sure your system has enough resources.\n")
-
-    response = input("🚀 Ready to start? (yes/no): ")
-    if response.lower() != 'yes':
-        print("❌ Aborted by user")
-        return
 
     print("\n" + "="*70)
     print("🔥 LAUNCHING PARALLEL BOOKINGS...")
@@ -161,11 +154,11 @@ def run_parallel_bookings(
     print("="*70)
 
 
-SPORT = "table_tennis" # "volleyball" or "table_tennis"
-TARGET_TIME = '04:49:00'
-START_TIME = "12:30"
-END_TIME = "16:30"
-DATE = "23 Oct 2025"
+SPORT = "volleyball" # "volleyball" or "table_tennis"
+TARGET_TIME = '08:30:00'
+START_TIME = "08:30"
+END_TIME = "13:30"
+DATE = "31 Oct 2025"
 
 
 if __name__ == "__main__":
@@ -177,16 +170,6 @@ if __name__ == "__main__":
         slot_end_time=END_TIME,
         sport=SPORT,
         target_time_str=TARGET_TIME,
-        network_offset_ms=200,
+        network_offset_ms=100,
         headless=False  # Set to True to hide browser windows
     )
-    # run_parallel_bookings(
-    #     csv_file="accounts.csv",
-    #     booking_date="25 Oct 2025",
-    #     slot_start_time="08:30",
-    #     slot_end_time="12:30",
-    #     sport="volleyball",
-    #     target_time_str="08:30:00",
-    #     network_offset_ms=200,
-    #     headless=False  # Set to True to hide browser windows
-    # )

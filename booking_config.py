@@ -8,21 +8,28 @@ PASSWORD = "abc"
 USER_ID = "442240"
 
 # Common venue
-CENTER_ID = "1"
-CENTER_NAME = "Shaw Sports Complex"
+CENTER_ID = "51"
+CENTER_NAME = "Shaw Sports Complex - Sports Practice Hall"
 DATASET_ID = "18"
 
 # Sport-specific configurations
 SPORTS_CONFIG = {
     "volleyball": {
         "activity_id": "6",
-        "facility_id": "1751",
-        "facility_name": "Volleyball Court No. 3",
+        "facility_id": "8",
+        "facility_name": "Volleyball Court No. 1",
     },
     "table_tennis": {
         "activity_id": "11",
         "facility_id": "16",
         "facility_name": "Table Tennis Table No. 1",
+    },
+    "fsch": {
+        "activity_id": "6",
+        "facility_id": "27",
+        "facility_name": "Volleyball Court No. 2",
+        "center_id": "2",
+        "center_name": "Fong Shu Chuen Hall",
     }
 }
 
@@ -87,6 +94,10 @@ def get_booking_config(sport, time_slot, booking_date, custom_start_time=None, c
     else:
         slot_config = TIME_SLOTS[time_slot]
 
+    # Use center info from sport config if available, otherwise use defaults
+    center_id = sport_config.get("center_id", CENTER_ID)
+    center_name = sport_config.get("center_name", CENTER_NAME)
+
     return {
         "username": USERNAME,
         "password": PASSWORD,
@@ -95,8 +106,8 @@ def get_booking_config(sport, time_slot, booking_date, custom_start_time=None, c
         "activity_id": sport_config["activity_id"],
         "facility_id": sport_config["facility_id"],
         "facility_name": sport_config["facility_name"],
-        "center_id": CENTER_ID,
-        "center_name": CENTER_NAME,
+        "center_id": center_id,
+        "center_name": center_name,
         "dataset_id": DATASET_ID,
         "date": booking_date,
         "start_time": slot_config["start"],

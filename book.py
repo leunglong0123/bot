@@ -8,6 +8,7 @@ import re
 from datetime import datetime, timedelta
 import time
 import pytz
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from booking_config import get_booking_config
 
 
@@ -292,6 +293,7 @@ class GenericBooking:
                 f"dataSetId={config['dataset_id']}&actvId={config['activity_id']}&"
                 f"searchDate=&ctrId={config['center_id']}&facilityId="
             )
+            
         elif sport == "table_tennis":
             form_data['searchFormString'] = (
                 f"fbUserId={config['user_id']}&bookType=INDV&"
@@ -330,40 +332,64 @@ class GenericBooking:
             'Content-Type': 'application/x-www-form-urlencoded',
         })
 
-        # Send request 3 times
-        responses = []
-        for i in range(3):
-            print(f"[{self._get_hkt_time()}] 📤 Sending request #{i+1}/3...")
+        # Helper function to send a single request
+        def send_request(request_num):
+            """Send a single booking request and return response with metadata"""
+            print(f"[{self._get_hkt_time()}] 📤 Sending request #{request_num}/3...")
             start_time = time.time()
             response = self.session.post(booking_url, data=form_data)
             elapsed = (time.time() - start_time) * 1000
-            responses.append(response)
 
             print(
                 f"[{self._get_hkt_time()}] "
-                f"📬 Response #{i+1} received in {elapsed:.0f}ms"
+                f"📬 Response #{request_num} received in {elapsed:.0f}ms"
             )
             print(f"   Status: {response.status_code}")
 
-            # Save response to file for inspection
-            timestamp = datetime.now(self.hkt).strftime('%Y%m%d_%H%M%S_%f')
-            response_filename = f'booking_response_{timestamp}_req{i+1}.html'
-            with open(response_filename, 'w', encoding='utf-8') as f:
-                f.write(response.text)
-            print(f"[{self._get_hkt_time()}] 💾 Saved response to {response_filename}")
+            return {
+                'request_num': request_num,
+                'response': response,
+                'elapsed_ms': elapsed,
+                'timestamp': datetime.now(self.hkt).strftime('%Y%m%d_%H%M%S_%f')
+            }
+
+        # Send all 3 requests concurrently using ThreadPoolExecutor
+        print(f"[{self._get_hkt_time()}] 🚀 Sending all 3 requests in parallel...")
+        responses = []
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            # Submit all 3 requests simultaneously
+            futures = {executor.submit(send_request, i+1): i+1 for i in range(3)}
+
+            # Collect results as they complete
+            for future in as_completed(futures):
+                result = future.result()
+                responses.append(result)
+
+                # Save response to file for inspection
+                response_filename = (
+                    f"booking_response_{result['timestamp']}_"
+                    f"req{result['request_num']}.html"
+                )
+                with open(response_filename, 'w', encoding='utf-8') as f:
+                    f.write(result['response'].text)
+                print(f"[{self._get_hkt_time()}] 💾 Saved response to {response_filename}")
+
+        # Sort responses by request number for consistency
+        responses.sort(key=lambda x: x['request_num'])
 
         # Check the last response
         print(f"\n[{self._get_hkt_time()}] 📊 All 3 requests sent!")
-        if response.status_code == 200:
-            if "success" in response.text.lower():
+        last_response = responses[-1]['response']
+        if last_response.status_code == 200:
+            if "success" in last_response.text.lower():
                 print(f"[{self._get_hkt_time()}] ✅ BOOKING SUCCESSFUL!")
                 return True
-            if "error" in response.text.lower():
+            if "error" in last_response.text.lower():
                 print(f"[{self._get_hkt_time()}] ⚠️  Possible error in response")
             else:
                 print(f"[{self._get_hkt_time()}] ℹ️  Booking submitted")
 
-        return response
+        return last_response
 
     def wait_until_exact_time(self, target_time_hkt, offset_ms=0):
         """Wait until exact target time in HKT"""
