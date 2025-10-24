@@ -9,9 +9,10 @@ from assign_slots import get_account_slots
 from datetime import datetime
 import pytz
 import os
+from logger import setup_logging, restore_logging
 
 
-def run_booking_for_account(account_slot, sport, target_time_str, network_offset_ms, headless, output_dir, pre_trigger_minutes):
+def run_booking_for_account(account_slot, sport, target_time_str, network_offset_ms, headless, output_dir, pre_trigger_minutes, log_dir):
     """
     Run booking for a single account (executed in separate process)
 
@@ -23,6 +24,7 @@ def run_booking_for_account(account_slot, sport, target_time_str, network_offset
         headless: Run browser in headless mode
         output_dir: Directory to save output files
         pre_trigger_minutes: Minutes before target time to start browser and get token
+        log_dir: Directory to save log files
     """
     account_username = account_slot['username']
 
@@ -35,8 +37,12 @@ def run_booking_for_account(account_slot, sport, target_time_str, network_offset
     print(f"{'='*70}\n")
 
     try:
-        # Create booking instance with unique account_id (using username for unique HTML files)
-        booking = GenericBooking(account_slot['user_id'], output_dir=output_dir)
+        # Create booking instance with unique account_id and log directory
+        booking = GenericBooking(
+            account_slot['user_id'],
+            output_dir=output_dir,
+            log_dir=log_dir
+        )
 
         # Run booking with account-specific credentials and time slot
         booking.run(
@@ -72,7 +78,8 @@ def run_parallel_bookings(
     target_time_str="08:30:00",
     network_offset_ms=200,
     headless=False,
-    pre_trigger_minutes=15
+    pre_trigger_minutes=15,
+    log_dir="logs"
 ):
     """
     Master function to run parallel bookings for all accounts
@@ -87,7 +94,11 @@ def run_parallel_bookings(
         network_offset_ms: Network offset in milliseconds (default 200ms)
         headless: Run browsers in headless mode (default False)
         pre_trigger_minutes: Minutes before target time to start browser and get token (default 15)
+        log_dir: Directory to save log files (default "logs")
     """
+    # Setup logging for master process
+    master_logger = setup_logging(log_dir=log_dir, user_id="master")
+
     print("\n" + "="*70)
     print("🎯 MASTER BOOKING SCRIPT - PARALLEL EXECUTION")
     print("="*70)
@@ -98,6 +109,8 @@ def run_parallel_bookings(
     output_dir = f'booking_run_{timestamp}'
     os.makedirs(output_dir, exist_ok=True)
     print(f"\n📁 Created output directory: {output_dir}")
+    print(f"📁 Log directory: {log_dir}")
+    print(f"📝 Master log file: {master_logger.log_path}")
 
     # Get account slot assignments
     print(f"\n📋 Loading accounts from {csv_file}...")
@@ -150,7 +163,8 @@ def run_parallel_bookings(
                 network_offset_ms,
                 headless,
                 output_dir,
-                pre_trigger_minutes
+                pre_trigger_minutes,
+                log_dir
             )
         )
         processes.append(process)
@@ -169,11 +183,15 @@ def run_parallel_bookings(
     print("\n" + "="*70)
     print("🎉 ALL BOOKINGS COMPLETED!")
     print(f"📁 All output files saved to: {output_dir}")
+    print(f"📝 All log files saved to: {log_dir}")
     print("="*70)
+
+    # Close master logger
+    restore_logging(master_logger)
 
 
 SPORT = "volleyball_shaw"  # Options: volleyball_shaw, volleyball_practice_hall, volleyball_fsch, table_tennis
-TARGET_TIME = '03:35:00'  # Target submission time (HH:MM:SS)
+TARGET_TIME = '05:54:00'  # Target submission time (HH:MM:SS)
 START_TIME = "08:30"  # Start time of the time slot (HH:MM)
 END_TIME = "12:30"  # End time of the time slot (HH:MM)
 DATE = "01 Nov 2025"  # Booking date (YYYY-MM-DD)

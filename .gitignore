@@ -98,6 +98,8 @@ success/
 output/
 logs/
 *.log
+booking_run_*/
+debug_*.html
 
 # Session and cookie files
 *.session

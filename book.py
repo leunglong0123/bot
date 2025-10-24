@@ -4,7 +4,6 @@ Generic booking script with configurable sport and time slots
 import re
 import os
 import time
-import sys
 import platform
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -13,12 +12,13 @@ import requests
 from bs4 import BeautifulSoup
 import pytz
 from booking_config import get_booking_config
+from logger import setup_logging, restore_logging
 
 
 class GenericBooking:
     """Generic booking system for PolyU facilities"""
 
-    def __init__(self, user_id=None, output_dir=None):
+    def __init__(self, user_id=None, output_dir=None, log_dir="logs"):
         self.playwright = None
         self.browser = None
         self.page = None
@@ -29,6 +29,8 @@ class GenericBooking:
         self.user_id = user_id  # For unique debug file naming
         self.output_dir = output_dir  # Directory to save output files
         self.connection_warmed = False  # Track if connection is pre-warmed
+        self.logger = None  # Will be set up when run() is called
+        self.log_dir = log_dir  # Directory for log files
 
     def start_browser(self, headless=False):
         """Initialize Playwright browser"""
@@ -662,6 +664,9 @@ class GenericBooking:
             custom_end_time: Optional custom end time (overrides config)
             pre_trigger_minutes: Minutes before target time to start browser and get token (default 15)
         """
+        # Setup logging first
+        self.logger = setup_logging(log_dir=self.log_dir, user_id=self.user_id)
+
         print("="*70)
         print("🎯 GENERIC BOOKING SYSTEM - HIGH ACCURACY MODE")
         print("="*70)
@@ -688,6 +693,7 @@ class GenericBooking:
         print(f"Sport: {sport.upper()}")
         print(f"Time Slot: {slot_display} ({config['start_time']}-{config['end_time']})")
         print(f"Date: {booking_date}")
+        print(f"Log file: {self.logger.log_path}")
         print("="*70 + "\n")
 
         try:
@@ -812,6 +818,10 @@ class GenericBooking:
             except KeyboardInterrupt:
                 print(f"\n[{self._get_hkt_time()}] 🛑 Shutting down...")
                 self.close_browser()
+            finally:
+                # Close logging before exiting
+                if self.logger:
+                    restore_logging(self.logger)
 
 
 # Example usage
