@@ -8,6 +8,7 @@ import re
 from datetime import datetime, timedelta
 import time
 import pytz
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from booking_config import get_booking_config
 
@@ -15,7 +16,7 @@ from booking_config import get_booking_config
 class GenericBooking:
     """Generic booking system for PolyU facilities"""
 
-    def __init__(self, user_id=None):
+    def __init__(self, user_id=None, output_dir=None):
         self.playwright = None
         self.browser = None
         self.page = None
@@ -24,6 +25,7 @@ class GenericBooking:
         self.cookies = []
         self.session = requests.Session()  # For fast submission
         self.user_id = user_id  # For unique debug file naming
+        self.output_dir = output_dir  # Directory to save output files
 
     def start_browser(self, headless=False):
         """Initialize Playwright browser"""
@@ -131,6 +133,8 @@ class GenericBooking:
 
             # Debug: Save HTML to file for inspection (with unique name per user)
             debug_filename = f'debug_csrf_page_{self.user_id}.html'
+            if self.output_dir:
+                debug_filename = os.path.join(self.output_dir, debug_filename)
             with open(debug_filename, 'w', encoding='utf-8') as f:
                 f.write(page_content)
             print(f"[{self._get_hkt_time()}] 🔍 Saved HTML to {debug_filename}")
@@ -370,6 +374,8 @@ class GenericBooking:
                     f"booking_response_{result['timestamp']}_"
                     f"req{result['request_num']}.html"
                 )
+                if self.output_dir:
+                    response_filename = os.path.join(self.output_dir, response_filename)
                 with open(response_filename, 'w', encoding='utf-8') as f:
                     f.write(result['response'].text)
                 print(f"[{self._get_hkt_time()}] 💾 Saved response to {response_filename}")

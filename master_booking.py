@@ -8,9 +8,10 @@ from book import GenericBooking
 from assign_slots import get_account_slots
 from datetime import datetime
 import pytz
+import os
 
 
-def run_booking_for_account(account_slot, sport, target_time_str, network_offset_ms, headless):
+def run_booking_for_account(account_slot, sport, target_time_str, network_offset_ms, headless, output_dir):
     """
     Run booking for a single account (executed in separate process)
 
@@ -20,6 +21,7 @@ def run_booking_for_account(account_slot, sport, target_time_str, network_offset
         target_time_str: Target submission time (e.g., "08:30:00")
         network_offset_ms: Network offset in milliseconds
         headless: Run browser in headless mode
+        output_dir: Directory to save output files
     """
     account_username = account_slot['username']
 
@@ -33,7 +35,7 @@ def run_booking_for_account(account_slot, sport, target_time_str, network_offset
 
     try:
         # Create booking instance with unique account_id (using username for unique HTML files)
-        booking = GenericBooking(account_slot['user_id'])
+        booking = GenericBooking(account_slot['user_id'], output_dir=output_dir)
 
         # Run booking with account-specific credentials and time slot
         booking.run(
@@ -85,6 +87,13 @@ def run_parallel_bookings(
     print("🎯 MASTER BOOKING SCRIPT - PARALLEL EXECUTION")
     print("="*70)
 
+    # Create timestamped output directory
+    hkt = pytz.timezone('Asia/Hong_Kong')
+    timestamp = datetime.now(hkt).strftime('%Y%m%d_%H%M%S')
+    output_dir = f'booking_run_{timestamp}'
+    os.makedirs(output_dir, exist_ok=True)
+    print(f"\n📁 Created output directory: {output_dir}")
+
     # Get account slot assignments
     print(f"\n📋 Loading accounts from {csv_file}...")
     account_slots = get_account_slots(
@@ -133,7 +142,8 @@ def run_parallel_bookings(
                 sport,
                 target_time_str,
                 network_offset_ms,
-                headless
+                headless,
+                output_dir
             )
         )
         processes.append(process)
@@ -151,14 +161,15 @@ def run_parallel_bookings(
 
     print("\n" + "="*70)
     print("🎉 ALL BOOKINGS COMPLETED!")
+    print(f"📁 All output files saved to: {output_dir}")
     print("="*70)
 
 
-SPORT = "volleyball" # "volleyball" or "table_tennis"
-TARGET_TIME = '08:30:00'
-START_TIME = "08:30"
-END_TIME = "13:30"
-DATE = "31 Oct 2025"
+SPORT = "volleyball_shaw"  # Options: volleyball_shaw, volleyball_practice_hall, volleyball_fsch, table_tennis
+TARGET_TIME = '03:35:00'  # Target submission time (HH:MM:SS)
+START_TIME = "08:30"  # Start time of the time slot (HH:MM)
+END_TIME = "12:30"  # End time of the time slot (HH:MM)
+DATE = "01 Nov 2025"  # Booking date (YYYY-MM-DD)
 
 
 if __name__ == "__main__":

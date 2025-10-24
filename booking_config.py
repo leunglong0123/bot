@@ -19,6 +19,27 @@ SPORTS_CONFIG = {
         "facility_id": "8",
         "facility_name": "Volleyball Court No. 1",
     },
+    "volleyball_shaw": {
+        "activity_id": "6",
+        "facility_id": "1751",
+        "facility_name": "Volleyball Court No. 3",
+        "center_id": "1",
+        "center_name": "Shaw Sports Complex",
+    },
+    "volleyball_practice_hall": {
+        "activity_id": "6",
+        "facility_id": "8",
+        "facility_name": "Volleyball Court No. 1",
+        "center_id": "51",
+        "center_name": "Shaw Sports Complex - Sports Practice Hall",
+    },
+    "volleyball_fsch": {
+        "activity_id": "6",
+        "facility_id": "27",
+        "facility_name": "Volleyball Court No. 2",
+        "center_id": "2",
+        "center_name": "Fong Shu Chuen Hall",
+    },
     "table_tennis": {
         "activity_id": "11",
         "facility_id": "16",

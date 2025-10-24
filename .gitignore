@@ -57,6 +57,60 @@ venv.bak/
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints
 
-# Secret files (edit as appropriate)
+# Secret files and sensitive data
 secrets.json
+*.key
+*.pem
+*.p12
+*.pfx
+*.cer
+*.crt
+*_rsa
+*_dsa
+*_ed25519
+*.keystore
+
+# Credentials and configuration with secrets
+accounts.csv
+*accounts*.csv
+credentials.json
+*credentials*.json
+*secrets*.json
+config.local.*
+*.local.json
+
+# API keys and tokens
+.env*
+!.env.example
+*.token
+*_token
+api_keys.txt
+auth_config.*
+
+# Request/Response files that may contain sensitive data
+*.curl
+*.http
+response*.json
+request*.json
+
+# Success/output directories that may contain sensitive logs
+success/
+output/
+logs/
+*.log
+
+# Session and cookie files
+*.session
+cookies.txt
+*.cookie
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.bak
+*.backup
+*~
 
