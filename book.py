@@ -135,6 +135,8 @@ class GenericBooking:
             debug_filename = f'debug_csrf_page_{self.user_id}.html'
             if self.output_dir:
                 debug_filename = os.path.join(self.output_dir, debug_filename)
+            else:
+                debug_filename = os.path.join(os.getcwd(), debug_filename)
             with open(debug_filename, 'w', encoding='utf-8') as f:
                 f.write(page_content)
             print(f"[{self._get_hkt_time()}] 🔍 Saved HTML to {debug_filename}")
@@ -376,6 +378,8 @@ class GenericBooking:
                 )
                 if self.output_dir:
                     response_filename = os.path.join(self.output_dir, response_filename)
+                else:
+                    response_filename = os.path.join(os.getcwd(), response_filename)
                 with open(response_filename, 'w', encoding='utf-8') as f:
                     f.write(result['response'].text)
                 print(f"[{self._get_hkt_time()}] 💾 Saved response to {response_filename}")
