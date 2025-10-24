@@ -12,7 +12,7 @@ import os
 from logger import setup_logging, restore_logging
 
 
-def run_booking_for_account(account_slot, sport, target_time_str, network_offset_ms, headless, output_dir, pre_trigger_minutes, log_dir):
+def run_booking_for_account(account_slot, sport, target_time_str, network_offset_ms, headless, output_dir, pre_trigger_minutes, log_dir, num_requests):
     """
     Run booking for a single account (executed in separate process)
 
@@ -25,6 +25,7 @@ def run_booking_for_account(account_slot, sport, target_time_str, network_offset
         output_dir: Directory to save output files
         pre_trigger_minutes: Minutes before target time to start browser and get token
         log_dir: Directory to save log files
+        num_requests: Number of parallel requests to spam when target time is reached
     """
     account_username = account_slot['username']
 
@@ -60,7 +61,9 @@ def run_booking_for_account(account_slot, sport, target_time_str, network_offset
             custom_start_time=account_slot['start_time'],
             custom_end_time=account_slot['end_time'],
             # Pass pre-trigger time
-            pre_trigger_minutes=pre_trigger_minutes
+            pre_trigger_minutes=pre_trigger_minutes,
+            # Pass number of requests to spam
+            num_requests=num_requests
         )
 
         print(f"\n✅ [{account_username}] Booking process completed!")
@@ -79,7 +82,8 @@ def run_parallel_bookings(
     network_offset_ms=200,
     headless=False,
     pre_trigger_minutes=15,
-    log_dir="logs"
+    log_dir="logs",
+    num_requests=5
 ):
     """
     Master function to run parallel bookings for all accounts
@@ -95,6 +99,7 @@ def run_parallel_bookings(
         headless: Run browsers in headless mode (default False)
         pre_trigger_minutes: Minutes before target time to start browser and get token (default 15)
         log_dir: Directory to save log files (default "logs")
+        num_requests: Number of parallel requests to spam per account (default 5)
     """
     # Setup logging for master process
     master_logger = setup_logging(log_dir=log_dir, user_id="master")
@@ -134,6 +139,7 @@ def run_parallel_bookings(
     print(f"   Network offset: {network_offset_ms}ms")
     print(f"   Headless mode: {headless}")
     print(f"   Pre-trigger time: {pre_trigger_minutes} minutes before target")
+    print(f"   Requests per account: {num_requests} (spam)")
     print(f"   Accounts to run: {len(account_slots)}")
     print("="*70 + "\n")
 
@@ -164,7 +170,8 @@ def run_parallel_bookings(
                 headless,
                 output_dir,
                 pre_trigger_minutes,
-                log_dir
+                log_dir,
+                num_requests
             )
         )
         processes.append(process)
@@ -196,6 +203,7 @@ START_TIME = "08:30"  # Start time of the time slot (HH:MM)
 END_TIME = "12:30"  # End time of the time slot (HH:MM)
 DATE = "01 Nov 2025"  # Booking date (YYYY-MM-DD)
 PRE_TRIGGER_MINUTES = 15  # Start browser and get token X minutes before target time
+NUM_REQUESTS = 5  # Number of requests to spam when target time is reached
 
 
 if __name__ == "__main__":
@@ -209,5 +217,6 @@ if __name__ == "__main__":
         target_time_str=TARGET_TIME,
         network_offset_ms=100,
         headless=False,  # Set to True to hide browser windows
-        pre_trigger_minutes=PRE_TRIGGER_MINUTES  # Start browser X minutes before target
+        pre_trigger_minutes=PRE_TRIGGER_MINUTES,  # Start browser X minutes before target
+        num_requests=NUM_REQUESTS  # Number of parallel requests to spam per account
     )

@@ -322,9 +322,9 @@ class GenericBooking:
 
         return form_data
 
-    def submit_booking(self, config):
-        """Submit booking request - sends 3 times"""
-        print(f"[{self._get_hkt_time()}] 🚀 SUBMITTING BOOKING REQUEST (3 TIMES)...")
+    def submit_booking(self, config, num_requests=5):
+        """Submit booking request - sends N times in parallel"""
+        print(f"[{self._get_hkt_time()}] 🚀 SUBMITTING BOOKING REQUEST ({num_requests} TIMES)...")
         print(f"   Sport: {config['sport']}")
         print(f"   Facility: {config['facility_name']}")
         print(f"   Time: {config['start_time']} - {config['end_time']}")
@@ -346,7 +346,7 @@ class GenericBooking:
         # Helper function to send a single request
         def send_request(request_num):
             """Send a single booking request and return response with metadata"""
-            print(f"[{self._get_hkt_time()}] 📤 Sending request #{request_num}/3...")
+            print(f"[{self._get_hkt_time()}] 📤 Sending request #{request_num}/{num_requests}...")
             start_time = time.time()
             response = self.session.post(booking_url, data=form_data)
             elapsed = (time.time() - start_time) * 1000
@@ -364,12 +364,12 @@ class GenericBooking:
                 'timestamp': datetime.now(self.hkt).strftime('%Y%m%d_%H%M%S_%f')
             }
 
-        # Send all 3 requests concurrently using ThreadPoolExecutor
-        print(f"[{self._get_hkt_time()}] 🚀 Sending all 3 requests in parallel...")
+        # Send all N requests concurrently using ThreadPoolExecutor
+        print(f"[{self._get_hkt_time()}] 🚀 Sending all {num_requests} requests in parallel...")
         responses = []
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            # Submit all 3 requests simultaneously
-            futures = {executor.submit(send_request, i+1): i+1 for i in range(3)}
+        with ThreadPoolExecutor(max_workers=num_requests) as executor:
+            # Submit all N requests simultaneously
+            futures = {executor.submit(send_request, i+1): i+1 for i in range(num_requests)}
 
             # Collect results as they complete
             for future in as_completed(futures):
@@ -393,7 +393,7 @@ class GenericBooking:
         responses.sort(key=lambda x: x['request_num'])
 
         # Check the last response
-        print(f"\n[{self._get_hkt_time()}] 📊 All 3 requests sent!")
+        print(f"\n[{self._get_hkt_time()}] 📊 All {num_requests} requests sent!")
         last_response = responses[-1]['response']
         if last_response.status_code == 200:
             if "success" in last_response.text.lower():
@@ -645,7 +645,8 @@ class GenericBooking:
         user_id=None,
         custom_start_time=None,
         custom_end_time=None,
-        pre_trigger_minutes=15
+        pre_trigger_minutes=15,
+        num_requests=5
     ):
         """
         Complete workflow: wait, login (at pre-trigger time), wait, submit at exact time
@@ -663,6 +664,7 @@ class GenericBooking:
             custom_start_time: Optional custom start time (overrides config)
             custom_end_time: Optional custom end time (overrides config)
             pre_trigger_minutes: Minutes before target time to start browser and get token (default 15)
+            num_requests: Number of parallel requests to spam (default 5)
         """
         # Setup logging first
         self.logger = setup_logging(log_dir=self.log_dir, user_id=self.user_id)
@@ -793,7 +795,7 @@ class GenericBooking:
             self.wait_until_exact_time(target_datetime, network_offset_ms)
 
             # Step 11: Submit (using fast requests session)
-            response = self.submit_booking(config)
+            response = self.submit_booking(config, num_requests=num_requests)
 
             print("\n" + "="*70)
             print("📋 BOOKING PROCESS COMPLETE")
