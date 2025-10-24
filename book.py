@@ -404,11 +404,55 @@ class GenericBooking:
 
         return last_response
 
-    def wait_until_pre_trigger(self, pre_trigger_time_hkt):
-        """Wait until pre-trigger time (when to start browser and login)"""
+    def wait_until_one_hour_before(self, target_time_hkt):
+        """Initial wait - countdown until ~1 hour before target time"""
+        one_hour_before = target_time_hkt - timedelta(hours=1)
+
         while True:
             now_hkt = datetime.now(self.hkt)
-            remaining = (pre_trigger_time_hkt - now_hkt).total_seconds()
+            remaining = (one_hour_before - now_hkt).total_seconds()
+
+            if remaining <= 0:
+                break
+
+            if remaining > 2400:  # More than 40 minutes
+                print(
+                    f"[{self._get_hkt_time()}] "
+                    f"💤 Initial countdown: {int(remaining/60)} minutes until preparation phase"
+                )
+                time.sleep(1200)  # Sleep 20 minutes at a time
+            elif remaining > 1200:  # 20-40 minutes
+                print(
+                    f"[{self._get_hkt_time()}] "
+                    f"💤 Initial countdown: {int(remaining/60)} minutes until preparation phase"
+                )
+                time.sleep(240)  # Sleep 4 minutes at a time
+            elif remaining > 300:  # 5-20 minutes
+                print(
+                    f"[{self._get_hkt_time()}] "
+                    f"💤 Initial countdown: {int(remaining/60)} minutes until preparation phase"
+                )
+                time.sleep(60)  # Sleep 1 minute at a time
+            elif remaining > 60:  # 1-5 minutes
+                print(
+                    f"[{self._get_hkt_time()}] "
+                    f"💤 Initial countdown: {int(remaining)}s until preparation phase"
+                )
+                time.sleep(10)  # Sleep 10 seconds at a time
+            else:
+                print(
+                    f"[{self._get_hkt_time()}] "
+                    f"⏳ {remaining:.1f}s until preparation phase..."
+                )
+                time.sleep(5)
+
+        print(f"[{self._get_hkt_time()}] ⚡ ONE HOUR COUNTDOWN BEGINS!")
+
+    def wait_until_browser_start(self, browser_start_time_hkt):
+        """Second wait - countdown until browser start time (10 min before target)"""
+        while True:
+            now_hkt = datetime.now(self.hkt)
+            remaining = (browser_start_time_hkt - now_hkt).total_seconds()
 
             if remaining <= 0:
                 break
@@ -450,7 +494,7 @@ class GenericBooking:
                 )
                 time.sleep(1)
 
-        print(f"[{self._get_hkt_time()}] ⚡ PRE-TRIGGER TIME REACHED!")
+        print(f"[{self._get_hkt_time()}] ⚡ BROWSER START TIME REACHED!")
 
     def boost_process_priority(self):
         """Boost process priority for better timing accuracy"""
@@ -668,47 +712,69 @@ class GenericBooking:
             )
             target_datetime = self.hkt.localize(target_datetime)
 
-            # Calculate pre-trigger time (when to start browser and login)
-            pre_trigger_datetime = target_datetime - timedelta(minutes=pre_trigger_minutes)
+            # Calculate browser start time (pre_trigger_minutes before target)
+            browser_start_time = target_datetime - timedelta(minutes=pre_trigger_minutes)
+
+            # Calculate when to start countdown (1 hour before target)
+            one_hour_before = target_datetime - timedelta(hours=1)
+
+            now_hkt = datetime.now(self.hkt)
 
             print(f"⏰ Current time: {self._get_hkt_time()} HKT")
             print(f"⏰ Target time: {target_datetime.strftime('%H:%M:%S')} HKT")
-            print(f"⏰ Browser start time: {pre_trigger_datetime.strftime('%H:%M:%S')} HKT (T-{pre_trigger_minutes} min)")
+            print(f"⏰ Preparation phase starts: {one_hour_before.strftime('%H:%M:%S')} HKT (T-60 min)")
+            print(f"⏰ Browser start time: {browser_start_time.strftime('%H:%M:%S')} HKT (T-{pre_trigger_minutes} min)")
             print("="*70 + "\n")
 
-            # Step 2: Wait until pre-trigger time
-            self.wait_until_pre_trigger(pre_trigger_datetime)
+            # Step 2: Initial countdown - wait until 1 hour before target
+            if now_hkt < one_hour_before:
+                print("="*70)
+                print("📅 STAGE 1: INITIAL COUNTDOWN")
+                print("="*70)
+                self.wait_until_one_hour_before(target_datetime)
+                print("\n" + "="*70)
+                print("⏰ STAGE 2: PREPARATION PHASE ACTIVATED")
+                print("="*70 + "\n")
+            else:
+                print("="*70)
+                print("⏰ Already within 1 hour of target - skipping initial countdown")
+                print("="*70 + "\n")
 
-            # Step 2: Start browser
+            # Step 3: Second countdown - wait until browser start time
+            if now_hkt < browser_start_time:
+                self.wait_until_browser_start(browser_start_time)
+
+            # Step 4: Start browser and login
             print("\n" + "="*70)
-            print(f"⏰ PRE-TRIGGER TIME REACHED! Starting browser and login...")
+            print(f"🌐 STARTING BROWSER AND LOGIN")
             print("="*70 + "\n")
             self.start_browser(headless=headless)
 
-            # Step 3: Login
+            # Step 5: Login
             if not self.login(config['username'], config['password']):
                 print("❌ Login failed. Aborting.")
                 return False
 
-            # Step 4: Extract CSRF token
+            # Step 6: Extract CSRF token
             if not self.extract_csrf_token():
                 print("❌ Failed to get CSRF token. Aborting.")
                 return False
 
-            # Step 5: Transfer cookies to requests session for fast submission
+            # Step 7: Transfer cookies to requests session for fast submission
             self.transfer_cookies_to_session()
 
-            # Step 6: Pre-warm network connection
+            # Step 8: Pre-warm network connection
             booking_url = (
                 "https://www40.polyu.edu.hk/starspossfbstud/secure/"
                 "ui_make_book/make_book_submit.do"
             )
             self.warm_connection(booking_url)
 
-            # Step 7: Browser stays open for inspection (never closes)
+            # Step 9: Browser stays open for inspection (never closes)
 
             print("\n" + "="*70)
-            print(f"✅ READY TO BOOK!")
+            print(f"✅ STAGE 3: READY TO BOOK!")
+            print("="*70)
             print(
                 f"   Target: {target_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')}"
             )
@@ -717,10 +783,10 @@ class GenericBooking:
             print(f"   Time: {config['start_time']} - {config['end_time']}")
             print("="*70 + "\n")
 
-            # Step 8: Wait until exact submission time (with high-resolution timing)
+            # Step 10: Final countdown - wait until exact submission time
             self.wait_until_exact_time(target_datetime, network_offset_ms)
 
-            # Step 8: Submit (using fast requests session)
+            # Step 11: Submit (using fast requests session)
             response = self.submit_booking(config)
 
             print("\n" + "="*70)
