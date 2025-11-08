@@ -322,9 +322,10 @@ class GenericBooking:
 
         return form_data
 
-    def submit_booking(self, config, num_requests=5):
-        """Submit booking request - sends N times in parallel"""
-        print(f"[{self._get_hkt_time()}] 🚀 SUBMITTING BOOKING REQUEST ({num_requests} TIMES)...")
+    def submit_booking(self, config, num_requests=5, offset_ms_interval=0):
+        """Submit booking request - sends N times in parallel with optional staggering"""
+        mode = "simultaneous" if offset_ms_interval == 0 else f"staggered ({offset_ms_interval}ms intervals)"
+        print(f"[{self._get_hkt_time()}] 🚀 SUBMITTING BOOKING REQUEST ({num_requests} TIMES, {mode})...")
         print(f"   Sport: {config['sport']}")
         print(f"   Facility: {config['facility_name']}")
         print(f"   Time: {config['start_time']} - {config['end_time']}")
@@ -346,6 +347,11 @@ class GenericBooking:
         # Helper function to send a single request
         def send_request(request_num):
             """Send a single booking request and return response with metadata"""
+            # Add staggered delay if offset_ms_interval is set
+            if offset_ms_interval > 0:
+                delay_seconds = (request_num - 1) * offset_ms_interval / 1000.0
+                time.sleep(delay_seconds)
+
             print(f"[{self._get_hkt_time()}] 📤 Sending request #{request_num}/{num_requests}...")
             start_time = time.time()
             response = self.session.post(booking_url, data=form_data)
@@ -365,7 +371,10 @@ class GenericBooking:
             }
 
         # Send all N requests concurrently using ThreadPoolExecutor
-        print(f"[{self._get_hkt_time()}] 🚀 Sending all {num_requests} requests in parallel...")
+        if offset_ms_interval > 0:
+            print(f"[{self._get_hkt_time()}] 🚀 Sending {num_requests} requests with {offset_ms_interval}ms intervals...")
+        else:
+            print(f"[{self._get_hkt_time()}] 🚀 Sending all {num_requests} requests simultaneously...")
         responses = []
         with ThreadPoolExecutor(max_workers=num_requests) as executor:
             # Submit all N requests simultaneously
@@ -646,7 +655,8 @@ class GenericBooking:
         custom_start_time=None,
         custom_end_time=None,
         pre_trigger_minutes=15,
-        num_requests=5
+        num_requests=5,
+        offset_ms_interval=0
     ):
         """
         Complete workflow: wait, login (at pre-trigger time), wait, submit at exact time
@@ -665,6 +675,7 @@ class GenericBooking:
             custom_end_time: Optional custom end time (overrides config)
             pre_trigger_minutes: Minutes before target time to start browser and get token (default 15)
             num_requests: Number of parallel requests to spam (default 5)
+            offset_ms_interval: Interval in milliseconds between each request (default 0, simultaneous)
         """
         # Setup logging first
         self.logger = setup_logging(log_dir=self.log_dir, user_id=self.user_id)
@@ -795,7 +806,7 @@ class GenericBooking:
             self.wait_until_exact_time(target_datetime, network_offset_ms)
 
             # Step 11: Submit (using fast requests session)
-            response = self.submit_booking(config, num_requests=num_requests)
+            response = self.submit_booking(config, num_requests=num_requests, offset_ms_interval=offset_ms_interval)
 
             print("\n" + "="*70)
             print("📋 BOOKING PROCESS COMPLETE")

@@ -12,7 +12,7 @@ import os
 from logger import setup_logging, restore_logging
 
 
-def run_booking_for_account(account_slot, sport, target_time_str, network_offset_ms, headless, output_dir, pre_trigger_minutes, log_dir, num_requests):
+def run_booking_for_account(account_slot, sport, target_time_str, network_offset_ms, headless, output_dir, pre_trigger_minutes, log_dir, num_requests, offset_ms_interval):
     """
     Run booking for a single account (executed in separate process)
 
@@ -26,6 +26,7 @@ def run_booking_for_account(account_slot, sport, target_time_str, network_offset
         pre_trigger_minutes: Minutes before target time to start browser and get token
         log_dir: Directory to save log files
         num_requests: Number of parallel requests to spam when target time is reached
+        offset_ms_interval: Interval in milliseconds between each request (0 for simultaneous)
     """
     account_username = account_slot['username']
 
@@ -63,7 +64,9 @@ def run_booking_for_account(account_slot, sport, target_time_str, network_offset
             # Pass pre-trigger time
             pre_trigger_minutes=pre_trigger_minutes,
             # Pass number of requests to spam
-            num_requests=num_requests
+            num_requests=num_requests,
+            # Pass offset interval between requests
+            offset_ms_interval=offset_ms_interval
         )
 
         print(f"\n✅ [{account_username}] Booking process completed!")
@@ -83,7 +86,8 @@ def run_parallel_bookings(
     headless=False,
     pre_trigger_minutes=15,
     log_dir="logs",
-    num_requests=5
+    num_requests=5,
+    offset_ms_interval=0
 ):
     """
     Master function to run parallel bookings for all accounts
@@ -100,6 +104,7 @@ def run_parallel_bookings(
         pre_trigger_minutes: Minutes before target time to start browser and get token (default 15)
         log_dir: Directory to save log files (default "logs")
         num_requests: Number of parallel requests to spam per account (default 5)
+        offset_ms_interval: Interval in milliseconds between each request (default 0, simultaneous)
     """
     # Setup logging for master process
     master_logger = setup_logging(log_dir=log_dir, user_id="master")
@@ -140,6 +145,7 @@ def run_parallel_bookings(
     print(f"   Headless mode: {headless}")
     print(f"   Pre-trigger time: {pre_trigger_minutes} minutes before target")
     print(f"   Requests per account: {num_requests} (spam)")
+    print(f"   Request interval: {offset_ms_interval}ms (0=simultaneous)")
     print(f"   Accounts to run: {len(account_slots)}")
     print("="*70 + "\n")
 
@@ -171,7 +177,8 @@ def run_parallel_bookings(
                 output_dir,
                 pre_trigger_minutes,
                 log_dir,
-                num_requests
+                num_requests,
+                offset_ms_interval
             )
         )
         processes.append(process)
@@ -198,13 +205,14 @@ def run_parallel_bookings(
 
 
 SPORT = "volleyball_shaw"  # Options: volleyball_shaw, volleyball_practice_hall, volleyball_fsch, table_tennis
-TARGET_TIME = '05:54:00'  # Target submission time (HH:MM:SS)
+TARGET_TIME = '08:30:00'  # Target submission time (HH:MM:SS)
 START_TIME = "08:30"  # Start time of the time slot (HH:MM)
 END_TIME = "12:30"  # End time of the time slot (HH:MM)
 DATE = "01 Nov 2025"  # Booking date (YYYY-MM-DD)
 PRE_TRIGGER_MINUTES = 15  # Start browser and get token X minutes before target time
-NUM_REQUESTS = 5  # Number of requests to spam when target time is reached
-
+NUM_REQUESTS = 7  # Number of requests to spam when target time is reached
+NETWORK_OFFSET_MS = 15  # Network offset in milliseconds
+OFFSET_MS_INTERVAL = 5  # Interval in milliseconds between requests
 
 if __name__ == "__main__":
     # Example usage - customize these parameters
@@ -215,8 +223,9 @@ if __name__ == "__main__":
         slot_end_time=END_TIME,
         sport=SPORT,
         target_time_str=TARGET_TIME,
-        network_offset_ms=100,
+        network_offset_ms=NETWORK_OFFSET_MS,
         headless=False,  # Set to True to hide browser windows
         pre_trigger_minutes=PRE_TRIGGER_MINUTES,  # Start browser X minutes before target
-        num_requests=NUM_REQUESTS  # Number of parallel requests to spam per account
+        num_requests=NUM_REQUESTS,  # Number of parallel requests to spam per account
+        offset_ms_interval=OFFSET_MS_INTERVAL  # Interval between requests (0=simultaneous)
     )
