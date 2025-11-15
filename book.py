@@ -27,6 +27,7 @@ class GenericBooking:
         self.cookies = []
         self.session = requests.Session()  # For fast submission
         self.user_id = user_id  # For unique debug file naming
+        self.username = None  # Will be set during login
         self.output_dir = output_dir  # Directory to save output files
         self.connection_warmed = False  # Track if connection is pre-warmed
         self.logger = None  # Will be set up when run() is called
@@ -69,6 +70,9 @@ class GenericBooking:
     def login(self, username, password):
         """Login and establish authenticated session"""
         print(f"[{self._get_hkt_time()}] 🔐 Logging in as {username}...")
+
+        # Store username for file naming
+        self.username = username
 
         # Navigate to the correct login page
         login_url = "https://www40.polyu.edu.hk/poss/secure/login/loginhome.do"
@@ -136,8 +140,10 @@ class GenericBooking:
             # Get page content
             page_content = self.page.content()
 
-            # Debug: Save HTML to file for inspection (with unique name per user)
-            debug_filename = f'debug_csrf_page_{self.user_id}.html'
+            # Debug: Save HTML to file for inspection (with username and fbUSERid)
+            username_part = self.username if self.username else 'unknown'
+            user_id_part = self.user_id if self.user_id else 'unknown'
+            debug_filename = f'debug_csrf_page_{username_part}_{user_id_part}.html'
             if self.output_dir:
                 debug_filename = os.path.join(self.output_dir, debug_filename)
             else:
@@ -344,6 +350,10 @@ class GenericBooking:
             'Content-Type': 'application/x-www-form-urlencoded',
         })
 
+        # Extract username and user_id for filename
+        username = config.get('username', 'unknown')
+        fb_user_id = config.get('user_id', 'unknown')
+
         # Helper function to send a single request
         def send_request(request_num):
             """Send a single booking request and return response with metadata"""
@@ -385,10 +395,10 @@ class GenericBooking:
                 result = future.result()
                 responses.append(result)
 
-                # Save response to file for inspection
+                # Save response to file for inspection (with username and fbUSERid)
                 response_filename = (
-                    f"booking_response_{result['timestamp']}_"
-                    f"req{result['request_num']}.html"
+                    f"booking_response_{username}_{fb_user_id}_"
+                    f"{result['timestamp']}_req{result['request_num']}.html"
                 )
                 if self.output_dir:
                     response_filename = os.path.join(self.output_dir, response_filename)
