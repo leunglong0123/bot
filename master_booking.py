@@ -31,7 +31,7 @@ def manage_account_record(account_info, headless, log_dir):
         headless: Run browser in headless mode
         log_dir: Directory to save log files
     """
-    account_username = account_info['username']
+    account_username = account_info["username"]
 
     print(f"\n{'='*70}")
     print(f"🔍 [{account_username}] Opening My Record page...")
@@ -40,41 +40,55 @@ def manage_account_record(account_info, headless, log_dir):
 
     try:
         # Create booking instance (we'll use it just for login)
-        booking = GenericBooking(
-            account_info['user_id'],
-            log_dir=log_dir
-        )
+        booking = GenericBooking(account_info["user_id"], log_dir=log_dir)
 
         # Start browser
         booking.start_browser(headless=headless)
 
         # Login
-        if not booking.login(account_info['username'], account_info['password']):
+        if not booking.login(account_info["username"], account_info["password"]):
             print(f"❌ [{account_username}] Login failed")
             return False
 
         # Navigate to My Record page
         my_record_url = "https://www40.polyu.edu.hk/starspossfbstud/secure/ui_my_record/my_record.do"
         print(f"[{booking._get_hkt_time()}] 📄 Navigating to My Record page...")
-        booking.page.goto(my_record_url, wait_until='networkidle', timeout=30000)
+        booking.page.goto(my_record_url, wait_until="networkidle", timeout=30000)
 
-        print(f"[{booking._get_hkt_time()}] ✅ [{account_username}] My Record page loaded!")
+        print(
+            f"[{booking._get_hkt_time()}] ✅ [{account_username}] My Record page loaded!"
+        )
         print(f"[{booking._get_hkt_time()}] 🌐 Browser will stay open for management")
-        print(f"[{booking._get_hkt_time()}] 💡 Press Ctrl+C when done to close all browsers\n")
+        print(
+            f"[{booking._get_hkt_time()}] 💡 Press Ctrl+C when done to close all browsers\n"
+        )
 
         # Keep browser open indefinitely
         try:
             while True:
                 time.sleep(60)
         except KeyboardInterrupt:
-            print(f"\n[{booking._get_hkt_time()}] 🛑 Closing browser for {account_username}...")
+            print(
+                f"\n[{booking._get_hkt_time()}] 🛑 Closing browser for {account_username}..."
+            )
             booking.close_browser()
 
     except Exception as e:
         print(f"\n❌ [{account_username}] Error: {e}")
 
 
-def run_booking_for_account(account_slot, sport, target_time_str, network_offset_ms, headless, output_dir, pre_trigger_minutes, log_dir, num_requests, offset_ms_interval):
+def run_booking_for_account(
+    account_slot,
+    sport,
+    target_time_str,
+    network_offset_ms,
+    headless,
+    output_dir,
+    pre_trigger_minutes,
+    log_dir,
+    num_requests,
+    offset_ms_interval,
+):
     """
     Run booking for a single account (executed in separate process)
 
@@ -90,45 +104,42 @@ def run_booking_for_account(account_slot, sport, target_time_str, network_offset
         num_requests: Number of parallel requests to spam when target time is reached
         offset_ms_interval: Interval in milliseconds between each request (0 for simultaneous)
     """
-    account_username = account_slot['username']
+    account_username = account_slot["username"]
 
     print(f"\n{'='*70}")
     print(f"🚀 [{account_username}] Starting booking process...")
     print(f"   Name: {account_slot['name']}")
-    print(
-        f"   Time slot: {account_slot['start_time']} - {account_slot['end_time']}")
+    print(f"   Time slot: {account_slot['start_time']} - {account_slot['end_time']}")
     print(f"   Date: {account_slot['date']}")
     print(f"{'='*70}\n")
 
     try:
         # Create booking instance with unique account_id and log directory
         booking = GenericBooking(
-            account_slot['user_id'],
-            output_dir=output_dir,
-            log_dir=log_dir
+            account_slot["user_id"], output_dir=output_dir, log_dir=log_dir
         )
 
         # Run booking with account-specific credentials and time slot
         booking.run(
             sport=sport,
             time_slot=None,  # We'll use custom times from account_slot
-            booking_date=account_slot['date'],
+            booking_date=account_slot["date"],
             target_time_str=target_time_str,
             network_offset_ms=network_offset_ms,
             headless=headless,
             # Pass custom credentials
-            username=account_slot['username'],
-            password=account_slot['password'],
-            user_id=account_slot['user_id'],
+            username=account_slot["username"],
+            password=account_slot["password"],
+            user_id=account_slot["user_id"],
             # Pass custom time slot
-            custom_start_time=account_slot['start_time'],
-            custom_end_time=account_slot['end_time'],
+            custom_start_time=account_slot["start_time"],
+            custom_end_time=account_slot["end_time"],
             # Pass pre-trigger time
             pre_trigger_minutes=pre_trigger_minutes,
             # Pass number of requests to spam
             num_requests=num_requests,
             # Pass offset interval between requests
-            offset_ms_interval=offset_ms_interval
+            offset_ms_interval=offset_ms_interval,
         )
 
         print(f"\n✅ [{account_username}] Booking process completed!")
@@ -150,7 +161,7 @@ def run_parallel_bookings(
     log_dir="logs",
     num_requests=5,
     offset_ms_interval=0,
-    allocation_strategy="priority"
+    allocation_strategy="priority",
 ):
     """
     Master function to run parallel bookings for all accounts
@@ -176,14 +187,14 @@ def run_parallel_bookings(
     # Setup logging for master process
     master_logger = setup_logging(log_dir=log_dir, user_id="master")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("🎯 MASTER BOOKING SCRIPT - PARALLEL EXECUTION")
-    print("="*70)
+    print("=" * 70)
 
     # Create timestamped output directory
-    hkt = pytz.timezone('Asia/Hong_Kong')
-    timestamp = datetime.now(hkt).strftime('%Y%m%d_%H%M%S')
-    output_dir = f'booking_run_{timestamp}'
+    hkt = pytz.timezone("Asia/Hong_Kong")
+    timestamp = datetime.now(hkt).strftime("%Y%m%d_%H%M%S")
+    output_dir = f"booking_run_{timestamp}"
     os.makedirs(output_dir, exist_ok=True)
     print(f"\n📁 Created output directory: {output_dir}")
     print(f"📁 Log directory: {log_dir}")
@@ -196,15 +207,16 @@ def run_parallel_bookings(
         date=booking_date,
         start_time=slot_start_time,
         end_time=slot_end_time,
-        allocation_strategy=allocation_strategy
+        allocation_strategy=allocation_strategy,
     )
 
     print(f"✅ Loaded {len(account_slots)} accounts with slot assignments:\n")
     for slot in account_slots:
         print(
-            f"   {slot['name']:<12} | {slot['username']:<12} | {slot['start_time']}-{slot['end_time']}")
+            f"   {slot['name']:<12} | {slot['username']:<12} | {slot['start_time']}-{slot['end_time']}"
+        )
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("⚡ Configuration:")
     print(f"   Sport: {sport}")
     print(f"   Booking date: {booking_date}")
@@ -216,19 +228,20 @@ def run_parallel_bookings(
     print(f"   Request interval: {offset_ms_interval}ms (0=simultaneous)")
     print(f"   Allocation strategy: {allocation_strategy}")
     print(f"   Accounts to run: {len(account_slots)}")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
     # Confirm before starting
-    hkt = pytz.timezone('Asia/Hong_Kong')
+    hkt = pytz.timezone("Asia/Hong_Kong")
     now_hkt = datetime.now(hkt)
     print(f"⏰ Current HKT time: {now_hkt.strftime('%H:%M:%S')}")
     print(
-        f"\n⚠️  WARNING: This will launch {len(account_slots)} browser instances in parallel!")
+        f"\n⚠️  WARNING: This will launch {len(account_slots)} browser instances in parallel!"
+    )
     print("   Make sure your system has enough resources.\n")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("🔥 LAUNCHING PARALLEL BOOKINGS...")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
     # Create process pool and run bookings in parallel
     processes = []
@@ -247,13 +260,14 @@ def run_parallel_bookings(
                 pre_trigger_minutes,
                 log_dir,
                 num_requests,
-                offset_ms_interval
-            )
+                offset_ms_interval,
+            ),
         )
         processes.append(process)
         process.start()
         print(
-            f"✅ Launched process for {account_slot['name']} ({account_slot['username']})")
+            f"✅ Launched process for {account_slot['name']} ({account_slot['username']})"
+        )
 
     print(f"\n🔥 All {len(processes)} processes launched!")
     print("⏳ Waiting for all bookings to complete...\n")
@@ -263,11 +277,11 @@ def run_parallel_bookings(
         process.join()
         print(f"✅ Process {i+1}/{len(processes)} completed")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("🎉 ALL BOOKINGS COMPLETED!")
     print(f"📁 All output files saved to: {output_dir}")
     print(f"📝 All log files saved to: {log_dir}")
-    print("="*70)
+    print("=" * 70)
 
     # Close master logger
     restore_logging(master_logger)
@@ -285,39 +299,43 @@ def run_management_mode(csv_file="accounts.csv", headless=False, log_dir="logs")
     # Setup logging for master process
     master_logger = setup_logging(log_dir=log_dir, user_id="master")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("📋 MANAGEMENT MODE - MY RECORD PAGE")
-    print("="*70)
+    print("=" * 70)
 
     # Read accounts from CSV
     print(f"\n📋 Loading accounts from {csv_file}...")
     accounts = []
-    with open(csv_file, 'r') as f:
+    with open(csv_file, "r") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            accounts.append({
-                'username': row['username'],
-                'name': row['name'],
-                'user_id': row['user_id'],
-                'password': row['password']
-            })
+            accounts.append(
+                {
+                    "username": row["username"],
+                    "name": row["name"],
+                    "user_id": row["user_id"],
+                    "password": row["password"],
+                }
+            )
 
     print(f"✅ Loaded {len(accounts)} accounts:\n")
     for account in accounts:
         print(f"   {account['name']:<12} | {account['username']:<12}")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("⚡ Configuration:")
     print(f"   Headless mode: {headless}")
     print(f"   Accounts to open: {len(accounts)}")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
-    print(f"\n⚠️  WARNING: This will launch {len(accounts)} browser instances in parallel!")
+    print(
+        f"\n⚠️  WARNING: This will launch {len(accounts)} browser instances in parallel!"
+    )
     print("   Make sure your system has enough resources.\n")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("🔥 OPENING MY RECORD PAGES...")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
     # Create process pool and open browsers in parallel
     processes = []
@@ -325,8 +343,7 @@ def run_management_mode(csv_file="accounts.csv", headless=False, log_dir="logs")
     for account in accounts:
         # Create a separate process for each account
         process = multiprocessing.Process(
-            target=manage_account_record,
-            args=(account, headless, log_dir)
+            target=manage_account_record, args=(account, headless, log_dir)
         )
         processes.append(process)
         process.start()
@@ -341,35 +358,40 @@ def run_management_mode(csv_file="accounts.csv", headless=False, log_dir="logs")
         for process in processes:
             process.join()
     except KeyboardInterrupt:
-        print("\n\n" + "="*70)
+        print("\n\n" + "=" * 70)
         print("🛑 SHUTTING DOWN ALL BROWSERS...")
-        print("="*70)
+        print("=" * 70)
         for i, process in enumerate(processes):
             process.terminate()
             process.join()
             print(f"✅ Closed browser {i+1}/{len(processes)}")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("🎉 ALL BROWSERS CLOSED!")
-    print("="*70)
+    print("=" * 70)
 
     # Close master logger
     restore_logging(master_logger)
 
 
 USAGE_MODE = "BOOKING"  # BOOKING/MANAGING
-SPORT = "volleyball_practice_hall"  # Options: volleyball_shaw, volleyball_practice_hall, volleyball_fsch, table_tennis
-TARGET_TIME = '04:58:40'  # Target submission time (HH:MM:SS)
+SPORT = "volleyball_shaw"  # Options: volleyball_shaw, volleyball_practice_hall, volleyball_fsch, table_tennis
+TARGET_TIME = "08:30:00"  # Target submission time (HH:MM:SS)
 START_TIME = "13:30"  # Start time of the time slot (HH:MM)
-END_TIME = "17:30"  # End time of the time slot (HH:MM)
-DATE = "23 Nov 2025"  # Booking date (YYYY-MM-DD)
+END_TIME = "19:30"  # End time of the time slot (HH:MM)
+DATE = "27 Dec 2025"  # Booking date (YYYY-MM-DD)
 PRE_TRIGGER_MINUTES = 10  # Start browser and get token X minutes before target time
-NUM_REQUESTS = 2  # Number of requests to spam when target time is reached
+NUM_REQUESTS = 8  # Number of requests to spam when target time is reached
 NETWORK_OFFSET_MS = 50  # Network offset in milliseconds
 OFFSET_MS_INTERVAL = 0  # Interval in milliseconds between requests (0=simultaneous)
-ALLOCATION_STRATEGY = "priority"  # "priority" (recommended), "balanced", or "sequential"
+ALLOCATION_STRATEGY = (
+    "priority"  # "priority" (recommended), "balanced", or "sequential"
+)
 
 if __name__ == "__main__":
+    import multiprocessing
+
+    multiprocessing.freeze_support()
     if USAGE_MODE == "BOOKING":
         # Booking mode - run parallel bookings at target time
         run_parallel_bookings(
@@ -384,14 +406,14 @@ if __name__ == "__main__":
             pre_trigger_minutes=PRE_TRIGGER_MINUTES,  # Start browser X minutes before target
             num_requests=NUM_REQUESTS,  # Number of parallel requests to spam per account
             offset_ms_interval=OFFSET_MS_INTERVAL,  # Interval between requests (0=simultaneous)
-            allocation_strategy=ALLOCATION_STRATEGY  # How to distribute accounts across slots
+            allocation_strategy=ALLOCATION_STRATEGY,  # How to distribute accounts across slots
         )
     elif USAGE_MODE == "MANAGING":
         # Management mode - open My Record page for all accounts
         run_management_mode(
             csv_file="accounts.csv",
             headless=False,  # Set to True to hide browser windows
-            log_dir="logs"
+            log_dir="logs",
         )
     else:
         print(f"❌ Invalid USAGE_MODE: {USAGE_MODE}")
