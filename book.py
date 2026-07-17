@@ -609,43 +609,84 @@ class GenericBooking:
         except Exception as e:
             print(f"[{self._get_hkt_time()}] ⚠️  Connection warm-up failed: {e}")
 
-    def check_time_sync(self):
-        """Check if system time is synchronized"""
-        try:
-            print(f"[{self._get_hkt_time()}] 🕐 Checking system time synchronization...")
+    def measure_server_offset(self, url, max_seconds=4.0):
+        """Measure the offset to fire with, against the *booking server's* clock.
 
-            # Try to get time from a reliable NTP server
-            import socket
-            import struct
+        What matters for winning the race is not how close our PC clock is to
+        UTC, but (a) the network latency to the PolyU server and (b) how far
+        the server's own clock differs from ours. Both are read directly from
+        the HTTP ``Date`` response header of the warmed session.
 
-            ntp_server = 'time.google.com'
-            ntp_port = 123
+        The server opens the slot at T on *its* clock, so to have our request
+        arrive exactly then we must send it ``one_way_latency + server_offset``
+        before our local clock reads T. That sum is returned in milliseconds.
 
-            client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            client.settimeout(3)
+        Returns the suggested offset in ms, or ``None`` if it could not be
+        measured (caller should then fall back to the static configured offset).
+        """
+        from email.utils import parsedate_to_datetime
 
-            # NTP request packet
-            ntp_packet = b'\x1b' + 47 * b'\0'
-            client.sendto(ntp_packet, (ntp_server, ntp_port))
+        print(f"[{self._get_hkt_time()}] 🛰️  Probing server clock via HTTP Date header...")
 
-            data, _ = client.recvfrom(1024)
-            client.close()
+        def sample():
+            t0 = time.time()
+            try:
+                resp = self.session.get(url, allow_redirects=False, timeout=5)
+            except Exception:
+                return None
+            t1 = time.time()
+            date_hdr = resp.headers.get("Date")
+            if not date_hdr:
+                return None
+            return t0, t1, parsedate_to_datetime(date_hdr).timestamp()
 
-            # Extract transmit timestamp (seconds since 1900)
-            ntp_time = struct.unpack('!12I', data)[10]
-            ntp_time -= 2208988800  # Convert to Unix timestamp
+        min_rtt = None
+        best = None       # (server_offset_ms, uncertainty_ms) at a second-rollover
+        prev = None       # (local_midpoint, server_second)
+        deadline = time.time() + max_seconds
+        while time.time() < deadline:
+            s = sample()
+            if s is None:
+                break
+            t0, t1, server_sec = s
+            rtt_ms = (t1 - t0) * 1000
+            if min_rtt is None or rtt_ms < min_rtt:
+                min_rtt = rtt_ms
+            mid = (t0 + t1) / 2
+            # Detect the moment the server's Date second ticks over. At that
+            # instant server time is exactly HH:MM:SS.000, pinning the offset
+            # to within roughly the gap between the two straddling samples.
+            if prev is not None and server_sec > prev[1]:
+                est_local_at_tick = (prev[0] + mid) / 2
+                offset_ms = (server_sec - est_local_at_tick) * 1000
+                uncertainty_ms = (mid - prev[0]) * 1000 / 2
+                if best is None or uncertainty_ms < best[1]:
+                    best = (offset_ms, uncertainty_ms)
+            prev = (mid, server_sec)
+            time.sleep(0.01)  # ~10ms between probes: gentle but catches rollover
 
-            system_time = time.time()
-            time_diff = abs(system_time - ntp_time)
+        if min_rtt is None:
+            print(f"[{self._get_hkt_time()}] ⚠️  Server clock probe failed (no Date header)")
+            return None
 
-            if time_diff > 1.0:
-                print(f"[{self._get_hkt_time()}] ⚠️  WARNING: System time off by {time_diff:.2f}s!")
-                print(f"[{self._get_hkt_time()}] 💡 Please sync your system clock for accuracy")
-            else:
-                print(f"[{self._get_hkt_time()}] ✅ System time synchronized (diff: {time_diff*1000:.0f}ms)")
-        except Exception as e:
-            print(f"[{self._get_hkt_time()}] ⚠️  Could not verify time sync: {e}")
-            print(f"[{self._get_hkt_time()}] 💡 Ensure your system time is accurate")
+        one_way = min_rtt / 2
+        if best is not None:
+            server_offset, unc = best
+            suggested = one_way + server_offset
+            print(
+                f"[{self._get_hkt_time()}] 📡 RTT min {min_rtt:.0f}ms "
+                f"(one-way ~{one_way:.0f}ms) | server clock {server_offset:+.0f}ms "
+                f"(±{unc:.0f}ms) vs local"
+            )
+            print(f"[{self._get_hkt_time()}] 🎯 Suggested dynamic offset: {suggested:.0f}ms early")
+            return suggested
+
+        # No rollover captured — can only compensate for latency, not clock skew.
+        print(
+            f"[{self._get_hkt_time()}] ⚠️  No Date rollover captured; "
+            f"compensating one-way latency only (~{one_way:.0f}ms)"
+        )
+        return one_way
 
     def wait_until_exact_time(self, target_time_hkt, offset_ms=0):
         """Wait until exact target time in HKT with high-resolution timing"""
@@ -725,7 +766,8 @@ class GenericBooking:
         custom_end_time=None,
         pre_trigger_minutes=15,
         num_requests=5,
-        offset_ms_interval=0
+        offset_ms_interval=0,
+        dynamic_offset=True
     ):
         """
         Complete workflow: wait, login (at pre-trigger time), wait, submit at exact time
@@ -784,8 +826,8 @@ class GenericBooking:
             print("🔧 SYSTEM OPTIMIZATION")
             print("="*70)
 
-            # Check time synchronization
-            self.check_time_sync()
+            # Note: server clock offset is measured live in STAGE 3 (once the
+            # session is warmed), not against UTC here — see measure_server_offset.
 
             # Boost process priority
             self.boost_process_priority()
@@ -858,15 +900,29 @@ class GenericBooking:
             )
             self.warm_connection(booking_url)
 
+            # Step 8b: Measure the live offset against the server's own clock
+            # and use it in place of the static configured value when available.
+            offset_source = "configured (static)"
+            if dynamic_offset:
+                measured = self.measure_server_offset(booking_url)
+                if measured is not None and -2000 <= measured <= 5000:
+                    network_offset_ms = measured
+                    offset_source = "measured (server clock)"
+                else:
+                    print(
+                        f"[{self._get_hkt_time()}] ⚠️  Keeping static offset "
+                        f"{network_offset_ms}ms (measurement unavailable/out of range)"
+                    )
+
             # Step 9: Browser stays open for inspection (never closes)
 
             print("\n" + "="*70)
-            print(f"✅ STAGE 3: READY TO BOOK!")
+            print("✅ STAGE 3: READY TO BOOK!")
             print("="*70)
             print(
                 f"   Target: {target_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')}"
             )
-            print(f"   Network offset: {network_offset_ms}ms early")
+            print(f"   Network offset: {network_offset_ms:.0f}ms early [{offset_source}]")
             print(f"   Facility: {config['facility_name']}")
             print(f"   Time: {config['start_time']} - {config['end_time']}")
             print("="*70 + "\n")
@@ -913,7 +969,8 @@ if __name__ == "__main__":
     TIME_SLOT = "morning_early"   # "morning_early", "morning_mid", etc.
     BOOKING_DATE = "25 Oct 2025"
     TARGET_TIME = "08:30:00"      # Exact submission time (HKT)
-    NETWORK_OFFSET_MS = 200       # Send 200ms early
+    NETWORK_OFFSET_MS = 200       # Fallback offset if the live probe fails
+    DYNAMIC_OFFSET = True         # Measure offset vs server clock right before firing
 
     # Run booking
     booking = GenericBooking()
@@ -922,5 +979,6 @@ if __name__ == "__main__":
         time_slot=TIME_SLOT,
         booking_date=BOOKING_DATE,
         target_time_str=TARGET_TIME,
-        network_offset_ms=NETWORK_OFFSET_MS
+        network_offset_ms=NETWORK_OFFSET_MS,
+        dynamic_offset=DYNAMIC_OFFSET
     )
