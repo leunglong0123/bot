@@ -88,6 +88,7 @@ def run_booking_for_account(
     log_dir,
     num_requests,
     offset_ms_interval,
+    dynamic_offset,
 ):
     """
     Run booking for a single account (executed in separate process)
@@ -140,6 +141,8 @@ def run_booking_for_account(
             num_requests=num_requests,
             # Pass offset interval between requests
             offset_ms_interval=offset_ms_interval,
+            # Measure offset vs server clock live instead of using static value
+            dynamic_offset=dynamic_offset,
         )
 
         print(f"\n✅ [{account_username}] Booking process completed!")
@@ -162,6 +165,7 @@ def run_parallel_bookings(
     num_requests=5,
     offset_ms_interval=0,
     allocation_strategy="priority",
+    dynamic_offset=True,
 ):
     """
     Master function to run parallel bookings for all accounts
@@ -261,6 +265,7 @@ def run_parallel_bookings(
                 log_dir,
                 num_requests,
                 offset_ms_interval,
+                dynamic_offset,
             ),
         )
         processes.append(process)
@@ -374,15 +379,16 @@ def run_management_mode(csv_file="accounts.csv", headless=False, log_dir="logs")
     restore_logging(master_logger)
 
 
-USAGE_MODE = "MANAGING"  # MANAGING/BOOKING
-SPORT = "volleyball_practice_hall"  # Options: volleyball_shaw, volleyball_practice_hall, volleyball_fsch, table_tennis
-TARGET_TIME = "08:30:00"  # Target submission time (HH:MM:SS)
-START_TIME = "17:30"  # Start time of the time slot (HH:MM)
-END_TIME = "22:30"  # End time of the time slot (HH:MM)
-DATE = "18 Jul 2026"  # Booking date (YYYY-MM-DD)
+USAGE_MODE = "BOOKING"  # MANAGING/BOOKING
+SPORT = "volleyball_shaw"  # Options: volleyball_shaw, volleyball_practice_hall, volleyball_fsch, table_tennis
+TARGET_TIME = "00:42:00"  # Target submission time (HH:MM:SS)
+START_TIME = "15:30"  # Start time of the time slot (HH:MM)
+END_TIME = "18:30"  # End time of the time slot (HH:MM)
+DATE = "25 Jul 2026"  # Booking date (YYYY-MM-DD)
 PRE_TRIGGER_MINUTES = 10  # Start browser and get token X minutes before target time
 NUM_REQUESTS = 20  # Number of requests to spam when target time is reached
-NETWORK_OFFSET_MS = 70  # Network offset in milliseconds
+NETWORK_OFFSET_MS = 70  # Fallback network offset (ms) if live probe fails
+DYNAMIC_OFFSET = True  # Measure offset vs server clock right before firing (overrides NETWORK_OFFSET_MS)
 OFFSET_MS_INTERVAL = 0  # Interval in milliseconds between requests (0=simultaneous)
 ALLOCATION_STRATEGY = (
     "priority"  # "priority" (recommended), "balanced", or "sequential"
@@ -407,6 +413,7 @@ if __name__ == "__main__":
             num_requests=NUM_REQUESTS,  # Number of parallel requests to spam per account
             offset_ms_interval=OFFSET_MS_INTERVAL,  # Interval between requests (0=simultaneous)
             allocation_strategy=ALLOCATION_STRATEGY,  # How to distribute accounts across slots
+            dynamic_offset=DYNAMIC_OFFSET,  # Live server-clock offset measurement
         )
     elif USAGE_MODE == "MANAGING":
         # Management mode - open My Record page for all accounts
