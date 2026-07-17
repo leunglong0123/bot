@@ -374,15 +374,15 @@ def run_management_mode(csv_file="accounts.csv", headless=False, log_dir="logs")
     restore_logging(master_logger)
 
 
-USAGE_MODE = "BOOKING"  # MANAGING/BOOKING
-SPORT = "volleyball_shaw"  # Options: volleyball_shaw, volleyball_practice_hall, volleyball_fsch, table_tennis
+USAGE_MODE = "MANAGING"  # MANAGING/BOOKING
+SPORT = "volleyball_practice_hall"  # Options: volleyball_shaw, volleyball_practice_hall, volleyball_fsch, table_tennis
 TARGET_TIME = "08:30:00"  # Target submission time (HH:MM:SS)
-START_TIME = "15:30"  # Start time of the time slot (HH:MM)
-END_TIME = "21:30"  # End time of the time slot (HH:MM)
-DATE = "11 Jul 2026"  # Booking date (YYYY-MM-DD)
+START_TIME = "17:30"  # Start time of the time slot (HH:MM)
+END_TIME = "22:30"  # End time of the time slot (HH:MM)
+DATE = "18 Jul 2026"  # Booking date (YYYY-MM-DD)
 PRE_TRIGGER_MINUTES = 10  # Start browser and get token X minutes before target time
-NUM_REQUESTS = 10  # Number of requests to spam when target time is reached
-NETWORK_OFFSET_MS = 60  # Network offset in milliseconds
+NUM_REQUESTS = 20  # Number of requests to spam when target time is reached
+NETWORK_OFFSET_MS = 70  # Network offset in milliseconds
 OFFSET_MS_INTERVAL = 0  # Interval in milliseconds between requests (0=simultaneous)
 ALLOCATION_STRATEGY = (
     "priority"  # "priority" (recommended), "balanced", or "sequential"
