@@ -26,6 +26,14 @@ class GenericBooking:
         self.hkt = pytz.timezone('Asia/Hong_Kong')
         self.cookies = []
         self.session = requests.Session()  # For fast submission
+        # Size the connection pool so N concurrent submission threads never
+        # block waiting for a free keep-alive connection. Default urllib3
+        # pool_maxsize is 10; with 20 threads half the requests would queue.
+        _adapter = requests.adapters.HTTPAdapter(
+            pool_connections=50, pool_maxsize=50
+        )
+        self.session.mount("https://", _adapter)
+        self.session.mount("http://", _adapter)
         self.user_id = user_id  # For unique debug file naming
         self.username = None  # Will be set during login
         self.output_dir = output_dir  # Directory to save output files
@@ -411,19 +419,70 @@ class GenericBooking:
         # Sort responses by request number for consistency
         responses.sort(key=lambda x: x['request_num'])
 
-        # Check the last response
+        # Classify every response and report the best outcome across all N.
+        # (A win can land on any request, not just the last one.)
         print(f"\n[{self._get_hkt_time()}] 📊 All {num_requests} requests sent!")
-        last_response = responses[-1]['response']
-        if last_response.status_code == 200:
-            if "success" in last_response.text.lower():
-                print(f"[{self._get_hkt_time()}] ✅ BOOKING SUCCESSFUL!")
-                return True
-            if "error" in last_response.text.lower():
-                print(f"[{self._get_hkt_time()}] ⚠️  Possible error in response")
-            else:
-                print(f"[{self._get_hkt_time()}] ℹ️  Booking submitted")
 
-        return last_response
+        won = None
+        for item in responses:
+            resp = item['response']
+            outcome, reason = self._classify_response(resp)
+            print(
+                f"[{self._get_hkt_time()}] "
+                f"   req#{item['request_num']}: {outcome.upper()} — {reason}"
+            )
+            if outcome == 'success':
+                won = item
+
+        if won is not None:
+            print(f"[{self._get_hkt_time()}] ✅ BOOKING SUCCESSFUL! (req#{won['request_num']})")
+            return True
+
+        print(f"[{self._get_hkt_time()}] ❌ BOOKING FAILED — no request won the slot")
+        return responses[-1]['response']
+
+    @staticmethod
+    def _classify_response(response):
+        """Classify a booking response as success / failed / unknown.
+
+        Returns (outcome, reason). Detection is failure-first because the page
+        always embeds the JS string `success: function(response){...}`, so a
+        naive `"success" in text` check is always true and is NOT a real signal.
+        """
+        if response.status_code != 200:
+            return 'failed', f"HTTP {response.status_code}"
+
+        text = response.text
+        low = text.lower()
+
+        # Known failure banners observed in real responses (alert-danger).
+        failure_signals = [
+            ("reserved by others", "timeslot taken by someone else (lost the race)"),
+            ("failed to reserve", "server rejected the reservation"),
+            ("is occupied from", "facility already occupied for that slot"),
+            ("personal booking in a day", "daily booking quota exceeded"),
+            ("maximum", "booking limit exceeded"),
+            ("exceed", "quota / booking limit exceeded"),
+            ("not allow", "booking not allowed"),
+            ("invalid", "invalid request / session"),
+        ]
+        for needle, reason in failure_signals:
+            if needle in low:
+                # Pull the actual banner text when available for the log.
+                m = re.search(r'alert-danger[^>]*>\s*([^<]{1,160})', text)
+                detail = m.group(1).strip() if m else ""
+                return 'failed', detail or reason
+
+        # Positive confirmation banner (alert-success) => real win.
+        if 'alert-success' in low or 'booking is successful' in low \
+                or 'successfully' in low:
+            m = re.search(r'alert-success[^>]*>\s*([^<]{1,160})', text)
+            detail = m.group(1).strip() if m else ""
+            return 'success', detail or "confirmation banner present"
+
+        # 200 with no banner is the booking form re-rendered: no booking was
+        # created (no confirmation, no error). Not a win — flag for review.
+        return 'unknown', "form re-rendered, no booking created (verify)"
 
     def wait_until_one_hour_before(self, target_time_hkt):
         """Initial wait - countdown until ~1 hour before target time"""
